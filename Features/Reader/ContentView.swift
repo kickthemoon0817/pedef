@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var errorReporter: ErrorReporter
     @Environment(\.modelContext) private var modelContext
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var isImporting = false
@@ -51,12 +52,26 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .importPDF)) { _ in
             isImporting = true
         }
+        .onAppear {
+            errorReporter.flushPending()
+        }
+        .alert(item: $errorReporter.currentError) { item in
+            Alert(
+                title: Text(item.title),
+                message: Text(item.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result else { return }
-        for url in urls {
-            importPDF(from: url)
+        switch result {
+        case .success(let urls):
+            for url in urls {
+                importPDF(from: url)
+            }
+        case .failure(let error):
+            errorReporter.report(title: "Import Failed", message: error.localizedDescription)
         }
     }
 
@@ -64,10 +79,22 @@ struct ContentView: View {
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier(UTType.pdf.identifier) {
                 provider.loadFileRepresentation(forTypeIdentifier: UTType.pdf.identifier) { url, error in
-                    if let url = url {
-                        DispatchQueue.main.async {
-                            importPDF(from: url)
+                    if let error = error {
+                        Task { @MainActor in
+                            errorReporter.report(title: "Import Failed", message: error.localizedDescription)
                         }
+                        return
+                    }
+
+                    guard let url = url else {
+                        Task { @MainActor in
+                            errorReporter.report(title: "Import Failed", message: "Unable to access the dropped file.")
+                        }
+                        return
+                    }
+
+                    DispatchQueue.main.async {
+                        importPDF(from: url)
                     }
                 }
             }
@@ -76,7 +103,10 @@ struct ContentView: View {
     }
 
     private func importPDF(from url: URL) {
-        guard url.startAccessingSecurityScopedResource() else { return }
+        guard url.startAccessingSecurityScopedResource() else {
+            errorReporter.report(title: "Access Denied", message: "Unable to access the selected file. Check file permissions and try again.")
+            return
+        }
         defer { url.stopAccessingSecurityScopedResource() }
 
         do {
@@ -85,7 +115,7 @@ struct ContentView: View {
             let paper = Paper(title: title, pdfData: data)
             modelContext.insert(paper)
         } catch {
-            print("Failed to import PDF: \(error)")
+            errorReporter.report(title: "Import Failed", message: error.localizedDescription)
         }
     }
 }

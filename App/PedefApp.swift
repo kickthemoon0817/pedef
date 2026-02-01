@@ -13,6 +13,7 @@ struct PedefApp: App {
     @StateObject private var appState = AppState()
     @StateObject private var historyService = HistoryService()
     @StateObject private var tagService = TagService()
+    @StateObject private var errorReporter = ErrorReporter()
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -42,6 +43,7 @@ struct PedefApp: App {
                 .environmentObject(appState)
                 .environmentObject(historyService)
                 .environmentObject(tagService)
+                .environmentObject(errorReporter)
                 .onAppear {
                     tagService.configure(with: sharedModelContainer.mainContext)
                 }
@@ -55,11 +57,13 @@ struct PedefApp: App {
         Settings {
             SettingsView()
                 .environmentObject(appState)
+                .environmentObject(errorReporter)
         }
 
         Window("Agent Assistant", id: "agent-panel") {
             AgentPanelView()
                 .environmentObject(appState)
+                .environmentObject(errorReporter)
         }
         .defaultSize(width: 400, height: 600)
         #endif
