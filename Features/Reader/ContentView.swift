@@ -135,6 +135,7 @@ struct ContentView: View {
             let title = url.deletingPathExtension().lastPathComponent
             let paper = Paper(title: title, pdfData: data)
             modelContext.insert(paper)
+            try modelContext.save()
         } catch {
             errorReporter.report(title: "Import Failed", message: error.localizedDescription)
         }
