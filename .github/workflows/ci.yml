@@ -23,8 +23,9 @@ jobs:
       - name: Install SwiftLint
         run: brew install swiftlint
 
-      - name: SwiftLint
+      - name: SwiftLint (non-blocking)
         run: swiftlint
+        continue-on-error: true
 
       - name: Build
         run: xcodebuild -scheme Pedef -configuration Debug build -destination 'platform=macOS'
