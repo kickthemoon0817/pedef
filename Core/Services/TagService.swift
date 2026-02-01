@@ -1,10 +1,12 @@
 import Foundation
 import SwiftData
+import OSLog
 
 /// Service for managing tags and paper-tag relationships
 @MainActor
 final class TagService: ObservableObject {
     private var modelContext: ModelContext?
+    private let logger = Logger(subsystem: "com.pedef.app", category: "tag-service")
 
     @Published var allTags: [Tag] = []
     @Published var recentTags: [Tag] = []
@@ -207,7 +209,7 @@ final class TagService: ObservableObject {
             popularTags = topTags(limit: 5)
             recentTags = Array(tagsByDate().prefix(5))
         } catch {
-            print("Failed to fetch tags: \(error)")
+            logger.error("Failed to fetch tags: \(error.localizedDescription)")
         }
     }
 }
