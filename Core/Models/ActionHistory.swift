@@ -28,6 +28,11 @@ enum ActionType: String, Codable, CaseIterable {
     case deleteCollection
     case addToCollection
     case removeFromCollection
+
+    // Tag actions
+    case createTag
+    case updateTag
+    case deleteTag
     case addTag
     case removeTag
 
@@ -49,7 +54,7 @@ enum ActionType: String, Codable, CaseIterable {
             return .annotation
         case .importPaper, .deletePaper, .movePaper, .createCollection,
              .deleteCollection, .addToCollection, .removeFromCollection,
-             .addTag, .removeTag:
+             .createTag, .updateTag, .deleteTag, .addTag, .removeTag:
             return .library
         case .agentQuery, .agentSuggestionAccepted, .agentSuggestionRejected:
             return .agent
@@ -80,8 +85,11 @@ enum ActionType: String, Codable, CaseIterable {
         case .deleteCollection: return "Deleted collection"
         case .addToCollection: return "Added to collection"
         case .removeFromCollection: return "Removed from collection"
-        case .addTag: return "Added tag"
-        case .removeTag: return "Removed tag"
+        case .createTag: return "Created tag"
+        case .updateTag: return "Updated tag"
+        case .deleteTag: return "Deleted tag"
+        case .addTag: return "Added tag to paper"
+        case .removeTag: return "Removed tag from paper"
         case .agentQuery: return "Asked AI agent"
         case .agentSuggestionAccepted: return "Accepted AI suggestion"
         case .agentSuggestionRejected: return "Rejected AI suggestion"
