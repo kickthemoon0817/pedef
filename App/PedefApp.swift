@@ -5,12 +5,14 @@ import SwiftData
 struct PedefApp: App {
     @StateObject private var appState = AppState()
     @StateObject private var historyService = HistoryService()
+    @StateObject private var tagService = TagService()
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
             Paper.self,
             Annotation.self,
             Collection.self,
+            Tag.self,
             ActionHistory.self,
             ReadingSession.self
         ])
@@ -32,6 +34,10 @@ struct PedefApp: App {
             ContentView()
                 .environmentObject(appState)
                 .environmentObject(historyService)
+                .environmentObject(tagService)
+                .onAppear {
+                    tagService.configure(with: sharedModelContainer.mainContext)
+                }
         }
         .modelContainer(sharedModelContainer)
         .commands {
@@ -67,6 +73,8 @@ final class AppState: ObservableObject {
     enum SidebarItem: Hashable {
         case library
         case collection(UUID)
+        case tag(UUID)
+        case tags
         case readingList
         case favorites
         case recentlyRead
