@@ -40,8 +40,13 @@ Pedef is a native macOS PDF reader and knowledge archive for academic research. 
 - Avoid large refactors when making focused fixes
 
 ## Build and Test
-- Build: `xcodebuild -scheme Pedef -configuration Debug build`
-- Test: `xcodebuild -scheme Pedef test`
+- Build: `xcodebuild -scheme Pedef -configuration Debug build -destination 'platform=macOS'`
+- Test: `xcodebuild -scheme Pedef test -destination 'platform=macOS'` or `./scripts/run-tests.sh`
+
+## CI and PR Workflow
+- CI: `.github/workflows/ci.yml` runs SwiftLint (non-blocking), build, and test on PRs and main.
+- PRs: follow `pull_request_format.md` and the template at `.github/pull_request_template.md`.
+- Verification: use automated commands only; avoid manual checks in agent workflows.
 
 ## Environment Variables
 - `ANTHROPIC_API_KEY`: Claude API key
