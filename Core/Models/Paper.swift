@@ -34,7 +34,10 @@ final class Paper {
     @Relationship(deleteRule: .nullify, inverse: \Collection.papers)
     var collections: [Collection]
 
-    var tags: [String]
+    @Relationship(deleteRule: .nullify)
+    var tagObjects: [Tag]
+
+    var tags: [String]  // Legacy: kept for backward compatibility
 
     // MARK: - Annotations
 
@@ -84,6 +87,7 @@ final class Paper {
         self.thumbnailData = nil
 
         self.collections = []
+        self.tagObjects = []
         self.tags = []
         self.annotations = []
 
@@ -125,6 +129,18 @@ extension Paper {
     var hasAnnotations: Bool {
         !annotations.isEmpty
     }
+
+    var hasTags: Bool {
+        !tagObjects.isEmpty
+    }
+
+    var tagNames: [String] {
+        tagObjects.map { $0.name }
+    }
+
+    var sortedTags: [Tag] {
+        tagObjects.sorted { $0.name < $1.name }
+    }
 }
 
 // MARK: - Search Support
@@ -136,7 +152,7 @@ extension Paper {
             authors.joined(separator: " "),
             abstract ?? "",
             keywords.joined(separator: " "),
-            tags.joined(separator: " ")
+            tagNames.joined(separator: " ")
         ].joined(separator: " ")
     }
 }
