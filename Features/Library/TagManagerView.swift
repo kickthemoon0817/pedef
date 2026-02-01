@@ -8,6 +8,7 @@ struct TagManagerView: View {
     @EnvironmentObject private var historyService: HistoryService
 
     @State private var searchQuery = ""
+    @FocusState private var isSearchFocused: Bool
     @State private var sortOrder: TagSortOrder = .name
     @State private var selectedTag: Tag?
     @State private var isEditingTag = false
@@ -90,11 +91,25 @@ struct TagManagerView: View {
                         .foregroundStyle(.secondary)
                     TextField("Search tags...", text: $searchQuery)
                         .textFieldStyle(.plain)
+                        .focused($isSearchFocused)
+                        .accessibilityLabel("Search tags")
+                    if !searchQuery.isEmpty {
+                        Button(action: { searchQuery = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Clear search")
+                    }
                 }
                 .padding(8)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color(nsColor: .textBackgroundColor))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(isSearchFocused ? Color.accentColor : Color.gray.opacity(0.3), lineWidth: 1)
                 )
 
                 // Sort picker
@@ -105,6 +120,7 @@ struct TagManagerView: View {
                 }
                 .pickerStyle(.segmented)
                 .frame(width: 200)
+                .help("Sort tags")
             }
         }
         .padding()
@@ -356,6 +372,7 @@ struct TagRowView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
+                    .help("Edit tag")
 
                     Button(action: onDelete) {
                         Image(systemName: "trash")
@@ -363,6 +380,7 @@ struct TagRowView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.red)
+                    .help("Delete tag")
                 }
             }
         }
@@ -381,4 +399,3 @@ struct TagRowView: View {
         }
     }
 }
-

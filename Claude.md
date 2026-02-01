@@ -213,16 +213,16 @@ Agents can:
 
 ### Code Style
 - Follow Swift API Design Guidelines
-- Use SwiftLint for consistency
+- Use SwiftLint for consistency (`.swiftlint.yml`)
 - Prefer value types where appropriate
 - Use async/await for asynchronous operations
 - Document public APIs with DocC comments
 
 ### Testing
-- Unit tests for all services and models
-- Integration tests for database operations
-- UI tests for critical user flows
-- Minimum 70% code coverage target
+- Automated checks use `xcodebuild` with macOS destination
+- Unit tests live under `Tests/PedefTests`
+- UI/E2E tests are not yet implemented
+- CI runs SwiftLint (non-blocking), build, and test via `.github/workflows/ci.yml`
 
 ### Performance
 - Lazy loading for PDF pages
@@ -239,19 +239,18 @@ Agents can:
 ## Build & Run
 
 ```bash
-# Clone repository
-git clone https://github.com/user/pedef.git
-cd pedef
-
-# Open in Xcode
-open Pedef.xcodeproj
-
 # Or build from command line
-xcodebuild -scheme Pedef -configuration Debug build
+xcodebuild -scheme Pedef -configuration Debug build -destination 'platform=macOS'
 
 # Run tests
-xcodebuild -scheme Pedef test
+xcodebuild -scheme Pedef test -destination 'platform=macOS'
+./scripts/run-tests.sh
 ```
+
+## CI and PR Workflow
+
+- CI: `.github/workflows/ci.yml` runs SwiftLint (non-blocking), build, and test.
+- PRs: follow `pull_request_format.md` and `.github/pull_request_template.md`.
 
 ## Configuration
 
@@ -299,7 +298,7 @@ xcodebuild -scheme Pedef test
 2. Follow code style guidelines
 3. Add tests for new functionality
 4. Update documentation as needed
-5. Submit PR with clear description
+5. Submit PR using `pull_request_format.md` (template at `.github/pull_request_template.md`) and ensure CI passes
 
 ## License
 

@@ -1,0 +1,21 @@
+included:
+  - App
+  - Core
+  - Features
+  - Shared
+  - Resources
+  - Tests
+
+excluded:
+  - .build
+  - scripts
+
+line_length:
+  warning: 120
+  error: 160
+
+opt_in_rules:
+  - empty_count
+  - explicit_init
+  - sorted_imports
+  - vertical_parameter_alignment_on_call
