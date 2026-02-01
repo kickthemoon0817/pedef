@@ -410,6 +410,14 @@ struct ReaderBottomToolbar: View {
     let onPreviousPage: () -> Void
     let onNextPage: () -> Void
 
+    private var canZoomOut: Bool {
+        scale > 0.25
+    }
+
+    private var canZoomIn: Bool {
+        scale < 4.0
+    }
+
     var body: some View {
         HStack(spacing: 16) {
             // Page navigation
@@ -420,6 +428,7 @@ struct ReaderBottomToolbar: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(currentPage <= 0)
+                .help("Previous Page")
 
                 Button(action: onPageTap) {
                     Text("Page \(currentPage + 1) of \(totalPages)")
@@ -438,6 +447,7 @@ struct ReaderBottomToolbar: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(currentPage >= totalPages - 1)
+                .help("Next Page")
             }
 
             Spacer()
@@ -451,6 +461,8 @@ struct ReaderBottomToolbar: View {
                         .font(.caption.weight(.semibold))
                 }
                 .buttonStyle(.plain)
+                .disabled(!canZoomOut)
+                .help("Zoom Out")
 
                 Text("\(Int(scale * 100))%")
                     .font(.caption.weight(.medium))
@@ -464,6 +476,8 @@ struct ReaderBottomToolbar: View {
                         .font(.caption.weight(.semibold))
                 }
                 .buttonStyle(.plain)
+                .disabled(!canZoomIn)
+                .help("Zoom In")
 
                 Menu {
                     Button("50%") { scale = 0.5 }
@@ -481,6 +495,7 @@ struct ReaderBottomToolbar: View {
                 }
                 .menuStyle(.borderlessButton)
                 .frame(width: 16)
+                .help("Zoom Presets")
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
@@ -852,4 +867,3 @@ struct AnnotationRow: View {
         }
     }
 }
-
