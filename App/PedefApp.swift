@@ -1,8 +1,15 @@
 import SwiftUI
 import SwiftData
+#if os(macOS)
+import AppKit
+#endif
 
 @main
 struct PedefApp: App {
+    #if os(macOS)
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    #endif
+
     @StateObject private var appState = AppState()
     @StateObject private var historyService = HistoryService()
     @StateObject private var tagService = TagService()
@@ -185,3 +192,29 @@ extension Notification.Name {
     static let summarizePaper = Notification.Name("summarizePaper")
     static let explainSelection = Notification.Name("explainSelection")
 }
+
+// MARK: - App Delegate
+
+#if os(macOS)
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Bring app to foreground when launched
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        // Bring app to foreground when dock icon is clicked
+        if !flag {
+            for window in sender.windows {
+                window.makeKeyAndOrderFront(self)
+            }
+        }
+        return true
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        // Keep app running even if all windows are closed (standard macOS behavior)
+        return false
+    }
+}
+#endif
