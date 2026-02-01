@@ -1,0 +1,78 @@
+# Xcode
+build/
+DerivedData/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xcuserstate
+*.xccheckout
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# CocoaPods
+Pods/
+Podfile.lock
+
+# Carthage
+Carthage/Build/
+Carthage/Checkouts/
+
+# AppCode
+.idea/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Thumbnails
+Thumbs.db
+
+# Environment
+.env
+.env.local
+*.env
+
+# API Keys - never commit these
+Secrets.swift
+secrets.json
+credentials.json
+
+# User-specific files
+*.xcuserdata/
+
+# Archives
+*.xcarchive/
+
+# Playgrounds
+timeline.xctimeline
+playground.xcworkspace
+
+# Testing
+*.gcno
+*.gcda
+coverage/
+
+# Logs
+*.log
+
+# Backup files
+*~
+*.bak
+*.swp
+*.swo
