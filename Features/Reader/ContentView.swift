@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var tagService: TagService
     @EnvironmentObject private var errorReporter: ErrorReporter
     @Environment(\.modelContext) private var modelContext
     @State private var columnVisibility = NavigationSplitViewVisibility.all
@@ -15,13 +16,7 @@ struct ContentView: View {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
-            Group {
-                if let paper = appState.currentPaper {
-                    PDFReaderView(paper: paper)
-                } else {
-                    LibraryView()
-                }
-            }
+            detailContent
             .overlay {
                 if isDragOver {
                     DragOverlay()
@@ -61,6 +56,32 @@ struct ContentView: View {
                 message: Text(item.message),
                 dismissButton: .default(Text("OK"))
             )
+        }
+    }
+
+    @ViewBuilder
+    private var detailContent: some View {
+        if let paper = appState.currentPaper {
+            PDFReaderView(paper: paper)
+        } else {
+            switch appState.sidebarSelection ?? .library {
+            case .library:
+                LibraryView(scope: .all)
+            case .recentlyRead:
+                LibraryView(scope: .recentlyRead)
+            case .favorites:
+                LibraryView(scope: .favorites)
+            case .readingList:
+                LibraryView(scope: .readingList)
+            case .collection(let id):
+                LibraryView(scope: .collection(id))
+            case .tag(let id):
+                LibraryView(scope: .tag(id))
+            case .tags:
+                TagManagerView(tagService: tagService)
+            case .history:
+                TimelineView()
+            }
         }
     }
 
@@ -150,6 +171,7 @@ struct SidebarView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var collections: [Collection]
     @Query private var papers: [Paper]
+    @Query private var tags: [Tag]
 
     private var recentPapersCount: Int {
         papers.filter { paper in
@@ -183,6 +205,11 @@ struct SidebarView: View {
                 NavigationLink(value: AppState.SidebarItem.readingList) {
                     Label("Reading List", systemImage: "books.vertical.fill")
                 }
+
+                NavigationLink(value: AppState.SidebarItem.tags) {
+                    Label("Tags", systemImage: "tag.fill")
+                }
+                .badge(tags.count)
             } header: {
                 Text("Library")
                     .font(.caption.weight(.semibold))
@@ -334,14 +361,30 @@ struct ReaderToolbar: View {
 
 // MARK: - Library View
 
+fileprivate enum LibraryScope {
+    case all
+    case recentlyRead
+    case favorites
+    case readingList
+    case collection(UUID)
+    case tag(UUID)
+}
+
 struct LibraryView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var appState: AppState
     @Query(sort: \Paper.importedDate, order: .reverse) private var papers: [Paper]
+    @Query private var collections: [Collection]
     @State private var searchText = ""
     @State private var selectedPapers: Set<UUID> = []
     @State private var viewMode: ViewMode = .grid
     @State private var sortOrder: SortOrder = .dateImported
+
+    fileprivate let scope: LibraryScope
+
+    fileprivate init(scope: LibraryScope = .all) {
+        self.scope = scope
+    }
 
     enum ViewMode: String, CaseIterable {
         case grid = "Grid"
@@ -362,12 +405,68 @@ struct LibraryView: View {
         case author = "Author"
     }
 
-    var filteredPapers: [Paper] {
-        var result = papers
+    private var filteredPapers: [Paper] {
+        var result = scopedPapers
         if !searchText.isEmpty {
             result = result.filter { $0.searchableText.localizedCaseInsensitiveContains(searchText) }
         }
-        return result
+        return sortPapers(result)
+    }
+
+    private var scopedPapers: [Paper] {
+        switch scope {
+        case .all:
+            return papers
+        case .recentlyRead:
+            let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
+            return papers.filter { ($0.lastOpenedDate ?? .distantPast) > cutoff }
+        case .favorites:
+            return papers.filter { paper in
+                paper.tags.contains("favorite") || paper.tagObjects.contains { $0.name == "favorite" }
+            }
+        case .readingList:
+            return papers.filter { !$0.isRead }
+        case .collection(let id):
+            return papers.filter { paper in
+                paper.collections.contains { $0.id == id }
+            }
+        case .tag(let id):
+            return papers.filter { paper in
+                paper.tagObjects.contains { $0.id == id }
+            }
+        }
+    }
+
+    private var libraryTitle: String {
+        switch scope {
+        case .all:
+            return "Library"
+        case .recentlyRead:
+            return "Recently Read"
+        case .favorites:
+            return "Favorites"
+        case .readingList:
+            return "Reading List"
+        case .collection(let id):
+            return collections.first { $0.id == id }?.name ?? "Collection"
+        case .tag(let id):
+            return papers.flatMap(\.tagObjects).first { $0.id == id }?.name ?? "Tag"
+        }
+    }
+
+    private func sortPapers(_ papers: [Paper]) -> [Paper] {
+        switch sortOrder {
+        case .dateImported:
+            return papers.sorted { $0.importedDate > $1.importedDate }
+        case .dateRead:
+            return papers.sorted { ($0.lastOpenedDate ?? .distantPast) > ($1.lastOpenedDate ?? .distantPast) }
+        case .title:
+            return papers.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        case .author:
+            return papers.sorted {
+                ($0.authors.first ?? "").localizedCaseInsensitiveCompare($1.authors.first ?? "") == .orderedAscending
+            }
+        }
     }
 
     var body: some View {
@@ -384,7 +483,7 @@ struct LibraryView: View {
             }
         }
         .searchable(text: $searchText, prompt: "Search papers, authors, keywords...")
-        .navigationTitle("Library")
+        .navigationTitle(libraryTitle)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Menu {
