@@ -28,7 +28,7 @@ let package = Package(
                 "KeychainAccess",
             ],
             path: ".",
-            exclude: ["Tests", "Claude.md", ".gitignore", ".build", "Resources"],
+            exclude: ["Tests", "Claude.md", ".gitignore", ".build", "Resources", "scripts"],
             sources: ["App", "Core", "Features", "Shared"],
             swiftSettings: [
                 .swiftLanguageMode(.v5)
