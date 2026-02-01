@@ -29,11 +29,20 @@ struct PedefApp: App {
             isStoredInMemoryOnly: false,
             allowsSave: true
         )
+        let fallbackConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: true,
+            allowsSave: true
+        )
 
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            ErrorReporter.pendingError = ErrorReporter.ErrorItem(
+                title: "Storage Error",
+                message: "Failed to open the library. Running with temporary storage. \(error.localizedDescription)"
+            )
+            return try! ModelContainer(for: schema, configurations: [fallbackConfiguration])
         }
     }()
 
@@ -46,6 +55,7 @@ struct PedefApp: App {
                 .environmentObject(errorReporter)
                 .onAppear {
                     tagService.configure(with: sharedModelContainer.mainContext)
+                    historyService.setModelContext(sharedModelContainer.mainContext)
                 }
         }
         .modelContainer(sharedModelContainer)
