@@ -28,10 +28,12 @@ final class TagService: ObservableObject {
             throw TagServiceError.notConfigured
         }
 
-        let normalizedName = name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedName.isEmpty else {
-            throw TagServiceError.invalidTagName
+        // Validate tag name
+        if let validationError = ValidationHelper.validateTagName(name) {
+            throw TagServiceError.validationFailed(validationError)
         }
+
+        let normalizedName = name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Check if tag already exists
         if let existingTag = findTag(named: normalizedName) {
@@ -221,6 +223,7 @@ enum TagServiceError: LocalizedError {
     case invalidTagName
     case tagNotFound
     case tagAlreadyExists
+    case validationFailed(ValidationError)
 
     var errorDescription: String? {
         switch self {
@@ -232,6 +235,8 @@ enum TagServiceError: LocalizedError {
             return "Tag not found"
         case .tagAlreadyExists:
             return "A tag with this name already exists"
+        case .validationFailed(let error):
+            return error.errorDescription
         }
     }
 }
