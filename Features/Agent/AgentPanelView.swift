@@ -695,6 +695,10 @@ struct GeneralSettingsView: View {
     @AppStorage("autoSaveInterval") private var autoSaveInterval = 30
     @AppStorage("rememberLastPaper") private var rememberLastPaper = true
     @AppStorage("showReadingProgress") private var showReadingProgress = true
+    @AppStorage("defaultZoom") private var defaultZoom = 100
+    @AppStorage("continuousScroll") private var continuousScroll = true
+    @AppStorage("confirmDelete") private var confirmDelete = true
+    @AppStorage("showThumbnails") private var showThumbnails = true
 
     var body: some View {
         Form {
@@ -708,25 +712,66 @@ struct GeneralSettingsView: View {
 
                 Toggle("Remember last opened paper", isOn: $rememberLastPaper)
                 Toggle("Show reading progress", isOn: $showReadingProgress)
+                Toggle("Continuous scroll mode", isOn: $continuousScroll)
+
+                Picker("Default zoom level", selection: $defaultZoom) {
+                    Text("75%").tag(75)
+                    Text("100%").tag(100)
+                    Text("125%").tag(125)
+                    Text("150%").tag(150)
+                    Text("Fit Width").tag(0)
+                }
             } header: {
                 Text("Reading")
             }
 
             Section {
-                HStack {
-                    Text("Library Location")
-                    Spacer()
-                    Text("~/Documents/Pedef")
+                Toggle("Show page thumbnails", isOn: $showThumbnails)
+                Toggle("Confirm before deleting papers", isOn: $confirmDelete)
+            } header: {
+                Text("Library")
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Data Location")
+                        .font(.subheadline)
+                    Text(getDataLocation())
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                    Button("Change...") { }
-                        .buttonStyle(.link)
+                        .textSelection(.enabled)
                 }
+
+                Button("Show in Finder") {
+                    showDataInFinder()
+                }
+                .buttonStyle(.link)
             } header: {
                 Text("Storage")
+            } footer: {
+                Text("Papers and annotations are stored securely using SwiftData.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
         }
         .formStyle(.grouped)
         .padding()
+    }
+
+    private func getDataLocation() -> String {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.pedef.app"
+        return appSupport?.appendingPathComponent(bundleID).path ?? "Unknown"
+    }
+
+    private func showDataInFinder() {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.pedef.app"
+        if let url = appSupport?.appendingPathComponent(bundleID) {
+            // Create directory if it doesn't exist
+            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
+        }
     }
 }
 
