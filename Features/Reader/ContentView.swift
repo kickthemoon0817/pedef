@@ -162,8 +162,38 @@ struct ContentView: View {
 
         do {
             let data = try Data(contentsOf: url)
-            let title = url.deletingPathExtension().lastPathComponent
-            let paper = Paper(title: title, pdfData: data)
+
+            // Validate PDF
+            guard PDFService.shared.isValidPDF(data) else {
+                errorReporter.report(title: "Invalid File", message: "The selected file is not a valid PDF document.")
+                return
+            }
+
+            // Extract metadata
+            let metadata = PDFService.shared.extractMetadata(from: data)
+            let documentInfo = PDFService.shared.getDocumentInfo(from: data)
+
+            // Use extracted title or filename as fallback
+            let title = metadata?.title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? metadata!.title!
+                : url.deletingPathExtension().lastPathComponent
+
+            let paper = Paper(
+                title: title,
+                authors: metadata?.authors ?? [],
+                pdfData: data,
+                pageCount: documentInfo?.pageCount ?? 0
+            )
+
+            // Set additional metadata
+            paper.abstract = metadata?.subject
+            paper.keywords = metadata?.keywords ?? []
+
+            // Generate thumbnail
+            if let thumbnailData = PDFService.shared.generateThumbnail(from: data) {
+                paper.thumbnailData = thumbnailData
+            }
+
             modelContext.insert(paper)
             try modelContext.save()
         } catch {

@@ -606,11 +606,17 @@ final class AgentPanelViewModel: ObservableObject {
         isStreaming = true
         streamingText = ""
 
+        // Extract full text from paper if available
+        var paperFullText: String? = nil
+        if let paper = currentPaper {
+            paperFullText = PDFService.shared.extractText(from: paper.pdfData)
+        }
+
         do {
             let context = AgentContext(
                 currentPaper: currentPaper,
                 selectedText: selectedText,
-                paperFullText: nil,
+                paperFullText: paperFullText,
                 annotations: currentPaper?.annotations ?? [],
                 conversationHistory: messages
             )
