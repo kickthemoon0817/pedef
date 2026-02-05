@@ -2,6 +2,36 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
+// MARK: - Collection Colors
+
+enum CollectionColor: String, CaseIterable {
+    case blue = "#007AFF"
+    case purple = "#AF52DE"
+    case pink = "#FF2D55"
+    case red = "#FF3B30"
+    case orange = "#FF9500"
+    case yellow = "#FFCC00"
+    case green = "#34C759"
+    case teal = "#5AC8FA"
+    case gray = "#8E8E93"
+
+    var hex: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .blue: return "Blue"
+        case .purple: return "Purple"
+        case .pink: return "Pink"
+        case .red: return "Red"
+        case .orange: return "Orange"
+        case .yellow: return "Yellow"
+        case .green: return "Green"
+        case .teal: return "Teal"
+        case .gray: return "Gray"
+        }
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var tagService: TagService
@@ -267,6 +297,7 @@ struct SidebarView: View {
 
 struct CollectionRow: View {
     let collection: Collection
+    @Environment(\.modelContext) private var modelContext
     @State private var isEditing = false
     @State private var editedName = ""
 
@@ -293,9 +324,23 @@ struct CollectionRow: View {
                 editedName = collection.name
                 isEditing = true
             }
-            Button("Change Color") { }
+
+            Menu("Change Color") {
+                ForEach(CollectionColor.allCases, id: \.self) { color in
+                    Button {
+                        collection.colorHex = color.hex
+                        collection.modifiedDate = Date()
+                    } label: {
+                        Label(color.displayName, systemImage: "circle.fill")
+                    }
+                }
+            }
+
             Divider()
-            Button("Delete", role: .destructive) { }
+
+            Button("Delete", role: .destructive) {
+                modelContext.delete(collection)
+            }
         }
     }
 }
@@ -741,12 +786,14 @@ struct PaperCard: View {
 
 struct PaperContextMenu: View {
     let paper: Paper
+    @EnvironmentObject private var appState: AppState
     @Environment(\.modelContext) private var modelContext
+    @Query private var collections: [Collection]
 
     var body: some View {
         Group {
             Button {
-                // Open
+                appState.openPaper(paper)
             } label: {
                 Label("Open", systemImage: "doc.text")
             }
@@ -765,19 +812,44 @@ struct PaperContextMenu: View {
             }
 
             Menu("Add to Collection") {
-                Button("New Collection...") { }
+                ForEach(collections.filter { $0.type == .folder }) { collection in
+                    Button {
+                        if !paper.collections.contains(where: { $0.id == collection.id }) {
+                            paper.collections.append(collection)
+                        }
+                    } label: {
+                        HStack {
+                            Text(collection.name)
+                            if paper.collections.contains(where: { $0.id == collection.id }) {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+
+                if !collections.isEmpty {
+                    Divider()
+                }
+
+                Button {
+                    let newCollection = Collection(name: "New Collection")
+                    modelContext.insert(newCollection)
+                    paper.collections.append(newCollection)
+                } label: {
+                    Label("New Collection...", systemImage: "plus")
+                }
             }
 
             Divider()
 
             Button {
-                // Export
+                exportPaper()
             } label: {
                 Label("Export...", systemImage: "square.and.arrow.up")
             }
 
             Button {
-                // Show in Finder
+                showInFinder()
             } label: {
                 Label("Show in Finder", systemImage: "folder")
             }
@@ -788,6 +860,39 @@ struct PaperContextMenu: View {
                 modelContext.delete(paper)
             } label: {
                 Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    private func exportPaper() {
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.pdf]
+        savePanel.nameFieldStringValue = "\(paper.title).pdf"
+
+        savePanel.begin { response in
+            if response == .OK, let url = savePanel.url {
+                do {
+                    try paper.pdfData.write(to: url)
+                } catch {
+                    // Error handled silently - could add error reporting
+                    print("Export failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func showInFinder() {
+        // Create a temporary file to show in Finder
+        let tempDir = FileManager.default.temporaryDirectory
+        let tempURL = tempDir.appendingPathComponent("\(paper.title).pdf")
+
+        do {
+            try paper.pdfData.write(to: tempURL)
+            NSWorkspace.shared.selectFile(tempURL.path, inFileViewerRootedAtPath: tempDir.path)
+        } catch {
+            // Fallback: open Documents folder
+            if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                NSWorkspace.shared.open(documentsURL)
             }
         }
     }
