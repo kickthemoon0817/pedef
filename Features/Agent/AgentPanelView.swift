@@ -728,7 +728,11 @@ struct AgentSettingsView: View {
     @AppStorage("agentEnabled") private var agentEnabled = true
     @AppStorage("summaryLength") private var summaryLength = "medium"
     @AppStorage("citationStyle") private var citationStyle = "apa"
-    @State private var apiKey = ""
+    @StateObject private var keychainService = KeychainService.shared
+    @State private var apiKeyInput = ""
+    @State private var showAPIKey = false
+    @State private var isSaving = false
+    @State private var saveMessage: String?
 
     var body: some View {
         Form {
@@ -755,16 +759,115 @@ struct AgentSettingsView: View {
             }
 
             Section {
-                SecureField("API Key", text: $apiKey, prompt: Text("sk-ant-..."))
+                HStack {
+                    if showAPIKey {
+                        TextField("API Key", text: $apiKeyInput, prompt: Text("sk-ant-..."))
+                            .textFieldStyle(.plain)
+                    } else {
+                        SecureField("API Key", text: $apiKeyInput, prompt: Text("sk-ant-..."))
+                            .textFieldStyle(.plain)
+                    }
+
+                    Button {
+                        showAPIKey.toggle()
+                    } label: {
+                        Image(systemName: showAPIKey ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                HStack {
+                    if keychainService.hasAPIKey {
+                        Label("API key configured", systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    } else {
+                        Label("No API key configured", systemImage: "exclamationmark.circle")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+
+                    Spacer()
+
+                    if !apiKeyInput.isEmpty {
+                        Button("Save") {
+                            saveAPIKey()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .disabled(isSaving)
+                    }
+
+                    if keychainService.hasAPIKey {
+                        Button("Clear") {
+                            clearAPIKey()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+
+                if let message = saveMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(message.contains("Error") ? .red : .green)
+                }
+
                 Text("Get your API key from console.anthropic.com")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Text("Your API key is stored securely in the system Keychain.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             } header: {
                 Text("Anthropic API")
             }
         }
         .formStyle(.grouped)
         .padding()
+        .onAppear {
+            // Load masked version if key exists
+            if keychainService.hasAPIKey {
+                apiKeyInput = ""
+            }
+        }
+    }
+
+    private func saveAPIKey() {
+        let trimmedKey = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedKey.isEmpty else {
+            saveMessage = "Error: Please enter an API key"
+            return
+        }
+
+        guard KeychainService.isValidAPIKeyFormat(trimmedKey) else {
+            saveMessage = "Error: Invalid API key format. Should start with 'sk-ant-'"
+            return
+        }
+
+        isSaving = true
+        keychainService.anthropicAPIKey = trimmedKey
+        apiKeyInput = ""
+        saveMessage = "API key saved securely"
+        isSaving = false
+
+        // Clear message after delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            saveMessage = nil
+        }
+    }
+
+    private func clearAPIKey() {
+        keychainService.clearAPIKey()
+        apiKeyInput = ""
+        saveMessage = "API key cleared"
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            saveMessage = nil
+        }
     }
 }
 
