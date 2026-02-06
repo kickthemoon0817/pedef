@@ -679,10 +679,33 @@ struct PaperGridView: View {
                         .contextMenu {
                             PaperContextMenu(paper: paper)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel(paperAccessibilityLabel(for: paper))
+                        .accessibilityHint("Double tap to open this paper")
+                        .accessibilityAddTraits(.isButton)
                 }
             }
             .padding(20)
         }
+    }
+
+    private func paperAccessibilityLabel(for paper: Paper) -> String {
+        var components: [String] = [paper.title]
+        if !paper.authors.isEmpty {
+            components.append("by \(paper.formattedAuthors)")
+        }
+        if paper.isRead {
+            components.append("read")
+        } else if paper.readingProgress > 0 {
+            components.append("\(Int(paper.readingProgress * 100))% complete")
+        }
+        if paper.tags.contains("favorite") {
+            components.append("favorite")
+        }
+        if paper.hasAnnotations {
+            components.append("\(paper.annotations.count) annotations")
+        }
+        return components.joined(separator: ", ")
     }
 }
 
@@ -736,6 +759,7 @@ struct PaperCard: View {
                                 .background(.black.opacity(0.5), in: Circle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
                     }
                     .padding(8)
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))

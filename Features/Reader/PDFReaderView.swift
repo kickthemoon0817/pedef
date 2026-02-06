@@ -429,6 +429,8 @@ struct ReaderBottomToolbar: View {
                 .buttonStyle(.plain)
                 .disabled(currentPage <= 0)
                 .help("Previous Page")
+                .accessibilityLabel("Previous page")
+                .accessibilityHint("Go to page \(currentPage)")
 
                 Button(action: onPageTap) {
                     Text("Page \(currentPage + 1) of \(totalPages)")
@@ -440,6 +442,8 @@ struct ReaderBottomToolbar: View {
                 }
                 .buttonStyle(.plain)
                 .help("Jump to page...")
+                .accessibilityLabel("Page \(currentPage + 1) of \(totalPages)")
+                .accessibilityHint("Tap to jump to a specific page")
 
                 Button(action: onNextPage) {
                     Image(systemName: "chevron.right")
@@ -448,6 +452,8 @@ struct ReaderBottomToolbar: View {
                 .buttonStyle(.plain)
                 .disabled(currentPage >= totalPages - 1)
                 .help("Next Page")
+                .accessibilityLabel("Next page")
+                .accessibilityHint("Go to page \(currentPage + 2)")
             }
 
             Spacer()
