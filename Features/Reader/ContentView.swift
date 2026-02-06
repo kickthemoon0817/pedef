@@ -2,8 +2,40 @@ import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
 
+// MARK: - Collection Colors
+
+enum CollectionColor: String, CaseIterable {
+    case blue = "#007AFF"
+    case purple = "#AF52DE"
+    case pink = "#FF2D55"
+    case red = "#FF3B30"
+    case orange = "#FF9500"
+    case yellow = "#FFCC00"
+    case green = "#34C759"
+    case teal = "#5AC8FA"
+    case gray = "#8E8E93"
+
+    var hex: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .blue: return "Blue"
+        case .purple: return "Purple"
+        case .pink: return "Pink"
+        case .red: return "Red"
+        case .orange: return "Orange"
+        case .yellow: return "Yellow"
+        case .green: return "Green"
+        case .teal: return "Teal"
+        case .gray: return "Gray"
+        }
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject private var appState: AppState
+    @EnvironmentObject private var tagService: TagService
+    @EnvironmentObject private var errorReporter: ErrorReporter
     @Environment(\.modelContext) private var modelContext
     @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var isImporting = false
@@ -14,13 +46,7 @@ struct ContentView: View {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
         } detail: {
-            Group {
-                if let paper = appState.currentPaper {
-                    PDFReaderView(paper: paper)
-                } else {
-                    LibraryView()
-                }
-            }
+            detailContent
             .overlay {
                 if isDragOver {
                     DragOverlay()
@@ -51,12 +77,52 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .importPDF)) { _ in
             isImporting = true
         }
+        .onAppear {
+            errorReporter.flushPending()
+        }
+        .alert(item: $errorReporter.currentError) { item in
+            Alert(
+                title: Text(item.title),
+                message: Text(item.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var detailContent: some View {
+        if let paper = appState.currentPaper {
+            PDFReaderView(paper: paper)
+        } else {
+            switch appState.sidebarSelection ?? .library {
+            case .library:
+                LibraryView(scope: .all)
+            case .recentlyRead:
+                LibraryView(scope: .recentlyRead)
+            case .favorites:
+                LibraryView(scope: .favorites)
+            case .readingList:
+                LibraryView(scope: .readingList)
+            case .collection(let id):
+                LibraryView(scope: .collection(id))
+            case .tag(let id):
+                LibraryView(scope: .tag(id))
+            case .tags:
+                TagManagerView(tagService: tagService)
+            case .history:
+                TimelineView()
+            }
+        }
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result else { return }
-        for url in urls {
-            importPDF(from: url)
+        switch result {
+        case .success(let urls):
+            for url in urls {
+                importPDF(from: url)
+            }
+        case .failure(let error):
+            errorReporter.report(title: "Import Failed", message: error.localizedDescription)
         }
     }
 
@@ -64,10 +130,22 @@ struct ContentView: View {
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier(UTType.pdf.identifier) {
                 provider.loadFileRepresentation(forTypeIdentifier: UTType.pdf.identifier) { url, error in
-                    if let url = url {
-                        DispatchQueue.main.async {
-                            importPDF(from: url)
+                    if let error = error {
+                        Task { @MainActor in
+                            errorReporter.report(title: "Import Failed", message: error.localizedDescription)
                         }
+                        return
+                    }
+
+                    guard let url = url else {
+                        Task { @MainActor in
+                            errorReporter.report(title: "Import Failed", message: "Unable to access the dropped file.")
+                        }
+                        return
+                    }
+
+                    DispatchQueue.main.async {
+                        importPDF(from: url)
                     }
                 }
             }
@@ -76,16 +154,50 @@ struct ContentView: View {
     }
 
     private func importPDF(from url: URL) {
-        guard url.startAccessingSecurityScopedResource() else { return }
+        guard url.startAccessingSecurityScopedResource() else {
+            errorReporter.report(title: "Access Denied", message: "Unable to access the selected file. Check file permissions and try again.")
+            return
+        }
         defer { url.stopAccessingSecurityScopedResource() }
 
         do {
             let data = try Data(contentsOf: url)
-            let title = url.deletingPathExtension().lastPathComponent
-            let paper = Paper(title: title, pdfData: data)
+
+            // Validate PDF
+            guard PDFService.shared.isValidPDF(data) else {
+                errorReporter.report(title: "Invalid File", message: "The selected file is not a valid PDF document.")
+                return
+            }
+
+            // Extract metadata
+            let metadata = PDFService.shared.extractMetadata(from: data)
+            let documentInfo = PDFService.shared.getDocumentInfo(from: data)
+
+            // Use extracted title or filename as fallback
+            let title = metadata?.title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? metadata!.title!
+                : url.deletingPathExtension().lastPathComponent
+
+            let paper = Paper(
+                title: title,
+                authors: metadata?.authors ?? [],
+                pdfData: data,
+                pageCount: documentInfo?.pageCount ?? 0
+            )
+
+            // Set additional metadata
+            paper.abstract = metadata?.subject
+            paper.keywords = metadata?.keywords ?? []
+
+            // Generate thumbnail
+            if let thumbnailData = PDFService.shared.generateThumbnail(from: data) {
+                paper.thumbnailData = thumbnailData
+            }
+
             modelContext.insert(paper)
+            try modelContext.save()
         } catch {
-            print("Failed to import PDF: \(error)")
+            errorReporter.report(title: "Import Failed", message: error.localizedDescription)
         }
     }
 }
@@ -120,6 +232,7 @@ struct SidebarView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var collections: [Collection]
     @Query private var papers: [Paper]
+    @Query private var tags: [Tag]
 
     private var recentPapersCount: Int {
         papers.filter { paper in
@@ -153,6 +266,11 @@ struct SidebarView: View {
                 NavigationLink(value: AppState.SidebarItem.readingList) {
                     Label("Reading List", systemImage: "books.vertical.fill")
                 }
+
+                NavigationLink(value: AppState.SidebarItem.tags) {
+                    Label("Tags", systemImage: "tag.fill")
+                }
+                .badge(tags.count)
             } header: {
                 Text("Library")
                     .font(.caption.weight(.semibold))
@@ -209,6 +327,7 @@ struct SidebarView: View {
 
 struct CollectionRow: View {
     let collection: Collection
+    @Environment(\.modelContext) private var modelContext
     @State private var isEditing = false
     @State private var editedName = ""
 
@@ -235,9 +354,23 @@ struct CollectionRow: View {
                 editedName = collection.name
                 isEditing = true
             }
-            Button("Change Color") { }
+
+            Menu("Change Color") {
+                ForEach(CollectionColor.allCases, id: \.self) { color in
+                    Button {
+                        collection.colorHex = color.hex
+                        collection.modifiedDate = Date()
+                    } label: {
+                        Label(color.displayName, systemImage: "circle.fill")
+                    }
+                }
+            }
+
             Divider()
-            Button("Delete", role: .destructive) { }
+
+            Button("Delete", role: .destructive) {
+                modelContext.delete(collection)
+            }
         }
     }
 }
@@ -304,14 +437,30 @@ struct ReaderToolbar: View {
 
 // MARK: - Library View
 
+fileprivate enum LibraryScope {
+    case all
+    case recentlyRead
+    case favorites
+    case readingList
+    case collection(UUID)
+    case tag(UUID)
+}
+
 struct LibraryView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var appState: AppState
     @Query(sort: \Paper.importedDate, order: .reverse) private var papers: [Paper]
+    @Query private var collections: [Collection]
     @State private var searchText = ""
     @State private var selectedPapers: Set<UUID> = []
     @State private var viewMode: ViewMode = .grid
     @State private var sortOrder: SortOrder = .dateImported
+
+    fileprivate let scope: LibraryScope
+
+    fileprivate init(scope: LibraryScope = .all) {
+        self.scope = scope
+    }
 
     enum ViewMode: String, CaseIterable {
         case grid = "Grid"
@@ -332,12 +481,68 @@ struct LibraryView: View {
         case author = "Author"
     }
 
-    var filteredPapers: [Paper] {
-        var result = papers
+    private var filteredPapers: [Paper] {
+        var result = scopedPapers
         if !searchText.isEmpty {
             result = result.filter { $0.searchableText.localizedCaseInsensitiveContains(searchText) }
         }
-        return result
+        return sortPapers(result)
+    }
+
+    private var scopedPapers: [Paper] {
+        switch scope {
+        case .all:
+            return papers
+        case .recentlyRead:
+            let cutoff = Date().addingTimeInterval(-7 * 24 * 60 * 60)
+            return papers.filter { ($0.lastOpenedDate ?? .distantPast) > cutoff }
+        case .favorites:
+            return papers.filter { paper in
+                paper.tags.contains("favorite") || paper.tagObjects.contains { $0.name == "favorite" }
+            }
+        case .readingList:
+            return papers.filter { !$0.isRead }
+        case .collection(let id):
+            return papers.filter { paper in
+                paper.collections.contains { $0.id == id }
+            }
+        case .tag(let id):
+            return papers.filter { paper in
+                paper.tagObjects.contains { $0.id == id }
+            }
+        }
+    }
+
+    private var libraryTitle: String {
+        switch scope {
+        case .all:
+            return "Library"
+        case .recentlyRead:
+            return "Recently Read"
+        case .favorites:
+            return "Favorites"
+        case .readingList:
+            return "Reading List"
+        case .collection(let id):
+            return collections.first { $0.id == id }?.name ?? "Collection"
+        case .tag(let id):
+            return papers.flatMap(\.tagObjects).first { $0.id == id }?.name ?? "Tag"
+        }
+    }
+
+    private func sortPapers(_ papers: [Paper]) -> [Paper] {
+        switch sortOrder {
+        case .dateImported:
+            return papers.sorted { $0.importedDate > $1.importedDate }
+        case .dateRead:
+            return papers.sorted { ($0.lastOpenedDate ?? .distantPast) > ($1.lastOpenedDate ?? .distantPast) }
+        case .title:
+            return papers.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        case .author:
+            return papers.sorted {
+                ($0.authors.first ?? "").localizedCaseInsensitiveCompare($1.authors.first ?? "") == .orderedAscending
+            }
+        }
     }
 
     var body: some View {
@@ -354,7 +559,7 @@ struct LibraryView: View {
             }
         }
         .searchable(text: $searchText, prompt: "Search papers, authors, keywords...")
-        .navigationTitle("Library")
+        .navigationTitle(libraryTitle)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Menu {
@@ -474,10 +679,33 @@ struct PaperGridView: View {
                         .contextMenu {
                             PaperContextMenu(paper: paper)
                         }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel(paperAccessibilityLabel(for: paper))
+                        .accessibilityHint("Double tap to open this paper")
+                        .accessibilityAddTraits(.isButton)
                 }
             }
             .padding(20)
         }
+    }
+
+    private func paperAccessibilityLabel(for paper: Paper) -> String {
+        var components: [String] = [paper.title]
+        if !paper.authors.isEmpty {
+            components.append("by \(paper.formattedAuthors)")
+        }
+        if paper.isRead {
+            components.append("read")
+        } else if paper.readingProgress > 0 {
+            components.append("\(Int(paper.readingProgress * 100))% complete")
+        }
+        if paper.tags.contains("favorite") {
+            components.append("favorite")
+        }
+        if paper.hasAnnotations {
+            components.append("\(paper.annotations.count) annotations")
+        }
+        return components.joined(separator: ", ")
     }
 }
 
@@ -531,6 +759,7 @@ struct PaperCard: View {
                                 .background(.black.opacity(0.5), in: Circle())
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
                     }
                     .padding(8)
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
@@ -611,12 +840,14 @@ struct PaperCard: View {
 
 struct PaperContextMenu: View {
     let paper: Paper
+    @EnvironmentObject private var appState: AppState
     @Environment(\.modelContext) private var modelContext
+    @Query private var collections: [Collection]
 
     var body: some View {
         Group {
             Button {
-                // Open
+                appState.openPaper(paper)
             } label: {
                 Label("Open", systemImage: "doc.text")
             }
@@ -635,19 +866,44 @@ struct PaperContextMenu: View {
             }
 
             Menu("Add to Collection") {
-                Button("New Collection...") { }
+                ForEach(collections.filter { $0.type == .folder }) { collection in
+                    Button {
+                        if !paper.collections.contains(where: { $0.id == collection.id }) {
+                            paper.collections.append(collection)
+                        }
+                    } label: {
+                        HStack {
+                            Text(collection.name)
+                            if paper.collections.contains(where: { $0.id == collection.id }) {
+                                Image(systemName: "checkmark")
+                            }
+                        }
+                    }
+                }
+
+                if !collections.isEmpty {
+                    Divider()
+                }
+
+                Button {
+                    let newCollection = Collection(name: "New Collection")
+                    modelContext.insert(newCollection)
+                    paper.collections.append(newCollection)
+                } label: {
+                    Label("New Collection...", systemImage: "plus")
+                }
             }
 
             Divider()
 
             Button {
-                // Export
+                exportPaper()
             } label: {
                 Label("Export...", systemImage: "square.and.arrow.up")
             }
 
             Button {
-                // Show in Finder
+                showInFinder()
             } label: {
                 Label("Show in Finder", systemImage: "folder")
             }
@@ -658,6 +914,39 @@ struct PaperContextMenu: View {
                 modelContext.delete(paper)
             } label: {
                 Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    private func exportPaper() {
+        let savePanel = NSSavePanel()
+        savePanel.allowedContentTypes = [.pdf]
+        savePanel.nameFieldStringValue = "\(paper.title).pdf"
+
+        savePanel.begin { response in
+            if response == .OK, let url = savePanel.url {
+                do {
+                    try paper.pdfData.write(to: url)
+                } catch {
+                    // Error handled silently - could add error reporting
+                    print("Export failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func showInFinder() {
+        // Create a temporary file to show in Finder
+        let tempDir = FileManager.default.temporaryDirectory
+        let tempURL = tempDir.appendingPathComponent("\(paper.title).pdf")
+
+        do {
+            try paper.pdfData.write(to: tempURL)
+            NSWorkspace.shared.selectFile(tempURL.path, inFileViewerRootedAtPath: tempDir.path)
+        } catch {
+            // Fallback: open Documents folder
+            if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                NSWorkspace.shared.open(documentsURL)
             }
         }
     }

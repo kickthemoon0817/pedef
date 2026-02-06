@@ -429,6 +429,8 @@ struct ReaderBottomToolbar: View {
                 .buttonStyle(.plain)
                 .disabled(currentPage <= 0)
                 .help("Previous Page")
+                .accessibilityLabel("Previous page")
+                .accessibilityHint("Go to page \(currentPage)")
 
                 Button(action: onPageTap) {
                     Text("Page \(currentPage + 1) of \(totalPages)")
@@ -440,6 +442,8 @@ struct ReaderBottomToolbar: View {
                 }
                 .buttonStyle(.plain)
                 .help("Jump to page...")
+                .accessibilityLabel("Page \(currentPage + 1) of \(totalPages)")
+                .accessibilityHint("Tap to jump to a specific page")
 
                 Button(action: onNextPage) {
                     Image(systemName: "chevron.right")
@@ -448,6 +452,8 @@ struct ReaderBottomToolbar: View {
                 .buttonStyle(.plain)
                 .disabled(currentPage >= totalPages - 1)
                 .help("Next Page")
+                .accessibilityLabel("Next page")
+                .accessibilityHint("Go to page \(currentPage + 2)")
             }
 
             Spacer()
@@ -779,9 +785,12 @@ struct AnnotationSidebarView: View {
                         }
                     }
 
-                    Section("All (\(filteredAnnotations.count))") {
-                        ForEach(filteredAnnotations) { annotation in
-                            AnnotationRow(annotation: annotation)
+                    let otherAnnotations = filteredAnnotations.filter { $0.pageIndex != currentPage }
+                    if !otherAnnotations.isEmpty {
+                        Section("Other Pages (\(otherAnnotations.count))") {
+                            ForEach(otherAnnotations) { annotation in
+                                AnnotationRow(annotation: annotation)
+                            }
                         }
                     }
                 }
@@ -793,8 +802,14 @@ struct AnnotationSidebarView: View {
 }
 
 struct AnnotationRow: View {
-    let annotation: Annotation
+    @Bindable var annotation: Annotation
+    @Environment(\.modelContext) private var modelContext
     @State private var isHovering = false
+    @State private var showEditNote = false
+    @State private var showColorPicker = false
+    @State private var showAddTag = false
+    @State private var editingNote = ""
+    @State private var newTag = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -852,18 +867,106 @@ struct AnnotationRow: View {
         .background(isHovering ? Color.secondary.opacity(0.05) : Color.clear)
         .onHover { isHovering = $0 }
         .contextMenu {
-            Button("Edit Note") { }
-            Button("Change Color") { }
-            Button("Add Tag") { }
+            Button("Edit Note") {
+                editingNote = annotation.noteContent ?? ""
+                showEditNote = true
+            }
+
+            Menu("Change Color") {
+                ForEach(AnnotationColor.allCases, id: \.self) { color in
+                    Button {
+                        annotation.colorHex = color.rawValue
+                        annotation.modifiedDate = Date()
+                    } label: {
+                        Label(color.displayName, systemImage: "circle.fill")
+                    }
+                }
+            }
+
+            Button("Add Tag") {
+                showAddTag = true
+            }
+
             Divider()
+
             Button("Copy Text") {
                 if let text = annotation.selectedText {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(text, forType: .string)
                 }
             }
+            .disabled(annotation.selectedText?.isEmpty ?? true)
+
             Divider()
-            Button("Delete", role: .destructive) { }
+
+            Button("Delete", role: .destructive) {
+                if let paper = annotation.paper {
+                    paper.annotations.removeAll { $0.id == annotation.id }
+                }
+                modelContext.delete(annotation)
+            }
+        }
+        .popover(isPresented: $showEditNote) {
+            VStack(spacing: 12) {
+                Text("Edit Note")
+                    .font(.headline)
+
+                TextEditor(text: $editingNote)
+                    .frame(width: 250, height: 100)
+                    .font(.body)
+
+                HStack {
+                    Button("Cancel") {
+                        showEditNote = false
+                    }
+                    .keyboardShortcut(.cancelAction)
+
+                    Spacer()
+
+                    Button("Save") {
+                        annotation.noteContent = editingNote.isEmpty ? nil : editingNote
+                        annotation.modifiedDate = Date()
+                        showEditNote = false
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding()
+            .frame(width: 300)
+        }
+        .popover(isPresented: $showAddTag) {
+            VStack(spacing: 12) {
+                Text("Add Tag")
+                    .font(.headline)
+
+                TextField("Tag name", text: $newTag)
+                    .textFieldStyle(.roundedBorder)
+
+                HStack {
+                    Button("Cancel") {
+                        newTag = ""
+                        showAddTag = false
+                    }
+                    .keyboardShortcut(.cancelAction)
+
+                    Spacer()
+
+                    Button("Add") {
+                        if !newTag.isEmpty && !annotation.tags.contains(newTag) {
+                            annotation.tags.append(newTag.lowercased())
+                            annotation.modifiedDate = Date()
+                        }
+                        newTag = ""
+                        showAddTag = false
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(newTag.isEmpty)
+                }
+            }
+            .padding()
+            .frame(width: 250)
         }
     }
 }

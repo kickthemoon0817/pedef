@@ -13,6 +13,7 @@ struct PedefApp: App {
     @StateObject private var appState = AppState()
     @StateObject private var historyService = HistoryService()
     @StateObject private var tagService = TagService()
+    @StateObject private var errorReporter = ErrorReporter()
 
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
@@ -28,11 +29,20 @@ struct PedefApp: App {
             isStoredInMemoryOnly: false,
             allowsSave: true
         )
+        let fallbackConfiguration = ModelConfiguration(
+            schema: schema,
+            isStoredInMemoryOnly: true,
+            allowsSave: true
+        )
 
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            ErrorReporter.pendingError = ErrorReporter.ErrorItem(
+                title: "Storage Error",
+                message: "Failed to open the library. Running with temporary storage. \(error.localizedDescription)"
+            )
+            return try! ModelContainer(for: schema, configurations: [fallbackConfiguration])
         }
     }()
 
@@ -42,8 +52,10 @@ struct PedefApp: App {
                 .environmentObject(appState)
                 .environmentObject(historyService)
                 .environmentObject(tagService)
+                .environmentObject(errorReporter)
                 .onAppear {
                     tagService.configure(with: sharedModelContainer.mainContext)
+                    historyService.setModelContext(sharedModelContainer.mainContext)
                 }
         }
         .modelContainer(sharedModelContainer)
@@ -55,11 +67,13 @@ struct PedefApp: App {
         Settings {
             SettingsView()
                 .environmentObject(appState)
+                .environmentObject(errorReporter)
         }
 
         Window("Agent Assistant", id: "agent-panel") {
             AgentPanelView()
                 .environmentObject(appState)
+                .environmentObject(errorReporter)
         }
         .defaultSize(width: 400, height: 600)
         #endif

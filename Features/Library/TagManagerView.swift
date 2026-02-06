@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftUI
 import SwiftData
 
 /// View for managing all tags in the library
@@ -6,6 +7,7 @@ struct TagManagerView: View {
     @Environment(\.modelContext) private var modelContext
     @ObservedObject var tagService: TagService
     @EnvironmentObject private var historyService: HistoryService
+    @EnvironmentObject private var errorReporter: ErrorReporter
 
     @State private var searchQuery = ""
     @FocusState private var isSearchFocused: Bool
@@ -15,11 +17,19 @@ struct TagManagerView: View {
     @State private var editTagName = ""
     @State private var editTagColor = ""
     @State private var showingDeleteConfirmation = false
+    @State private var resultAlert: TagManagerAlert?
 
     enum TagSortOrder: String, CaseIterable {
         case name = "Name"
         case usage = "Usage"
         case recent = "Recent"
+    }
+
+    struct TagManagerAlert: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
+        let isSuccess: Bool
     }
 
     private var sortedTags: [Tag] {
@@ -53,6 +63,13 @@ struct TagManagerView: View {
         }
         .sheet(isPresented: $isEditingTag) {
             editTagSheet
+        }
+        .alert(item: $resultAlert) { alert in
+            Alert(
+                title: Text(alert.title),
+                message: Text(alert.message),
+                dismissButton: .default(Text("OK"))
+            )
         }
         .alert("Delete Tag", isPresented: $showingDeleteConfirmation) {
             Button("Cancel", role: .cancel) {}
@@ -288,8 +305,13 @@ struct TagManagerView: View {
                     "tagName": tag.name
                 ]
             )
+            resultAlert = TagManagerAlert(
+                title: "Tag Created",
+                message: "\"\(tag.name)\" is now available in your library.",
+                isSuccess: true
+            )
         } catch {
-            print("Failed to create tag: \(error)")
+            errorReporter.report(error, title: "Tag Creation Failed")
         }
     }
 
@@ -306,8 +328,13 @@ struct TagManagerView: View {
                 ]
             )
             isEditingTag = false
+            resultAlert = TagManagerAlert(
+                title: "Tag Updated",
+                message: "\"\(editTagName)\" has been updated.",
+                isSuccess: true
+            )
         } catch {
-            print("Failed to update tag: \(error)")
+            errorReporter.report(error, title: "Tag Update Failed")
         }
     }
 
@@ -324,8 +351,13 @@ struct TagManagerView: View {
                 ]
             )
             selectedTag = nil
+            resultAlert = TagManagerAlert(
+                title: "Tag Deleted",
+                message: "\"\(tagName)\" was removed from your library.",
+                isSuccess: true
+            )
         } catch {
-            print("Failed to delete tag: \(error)")
+            errorReporter.report(error, title: "Tag Deletion Failed")
         }
     }
 }
