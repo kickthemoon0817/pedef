@@ -68,7 +68,7 @@ final class KeychainService: ObservableObject {
     }
 
     /// Validate that an API key looks correct (basic format check)
-    static func isValidAPIKeyFormat(_ key: String) -> Bool {
+    nonisolated static func isValidAPIKeyFormat(_ key: String) -> Bool {
         // Anthropic API keys start with "sk-ant-" and are fairly long
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.hasPrefix("sk-ant-") && trimmed.count > 20
