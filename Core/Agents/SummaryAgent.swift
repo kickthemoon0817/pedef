@@ -1,4 +1,5 @@
 import Foundation
+import KeychainAccess
 import SwiftAnthropic
 
 /// Agent for summarizing academic papers using SwiftAnthropic
@@ -9,11 +10,16 @@ final class SummaryAgent: PedefAgent {
     let capabilities: [AgentCapability] = [.summarize]
     let systemImage = "doc.text"
 
-    private let service: AnthropicService?
+    private var service: AnthropicService?
 
     init(apiKey: String? = nil) {
-        let key = apiKey ?? ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"]
-        if let key = key {
+        refreshAPIKey(apiKey)
+    }
+
+    /// Refresh the API key, checking Keychain and environment
+    func refreshAPIKey(_ explicitKey: String? = nil) {
+        let key = explicitKey ?? getAPIKey()
+        if let key = key, !key.isEmpty {
             self.service = AnthropicServiceFactory.service(
                 apiKey: key,
                 betaHeaders: nil
@@ -21,6 +27,30 @@ final class SummaryAgent: PedefAgent {
         } else {
             self.service = nil
         }
+    }
+
+    /// Get the API key from Keychain or environment
+    private func getAPIKey() -> String? {
+        // Try Keychain first via KeychainService (must be called from main actor)
+        // For non-main actor contexts, fall back to environment
+        if let keychainKey = try? getKeychainAPIKey(), !keychainKey.isEmpty {
+            return keychainKey
+        }
+
+        // Fall back to environment variable
+        return ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"]
+    }
+
+    private func getKeychainAPIKey() throws -> String? {
+        // Access keychain directly without going through MainActor
+        // This is a simplified access pattern for the agent
+        let keychain = KeychainAccess.Keychain(service: Bundle.main.bundleIdentifier ?? "com.pedef.app")
+        return try keychain.get("anthropic_api_key")
+    }
+
+    /// Check if the agent is properly configured
+    var isConfigured: Bool {
+        service != nil
     }
 
     func execute(query: String, context: AgentContext) async throws -> AgentResult {

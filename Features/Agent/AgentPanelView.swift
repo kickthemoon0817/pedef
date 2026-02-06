@@ -606,11 +606,17 @@ final class AgentPanelViewModel: ObservableObject {
         isStreaming = true
         streamingText = ""
 
+        // Extract full text from paper if available
+        var paperFullText: String? = nil
+        if let paper = currentPaper {
+            paperFullText = PDFService.shared.extractText(from: paper.pdfData)
+        }
+
         do {
             let context = AgentContext(
                 currentPaper: currentPaper,
                 selectedText: selectedText,
-                paperFullText: nil,
+                paperFullText: paperFullText,
                 annotations: currentPaper?.annotations ?? [],
                 conversationHistory: messages
             )
@@ -689,6 +695,10 @@ struct GeneralSettingsView: View {
     @AppStorage("autoSaveInterval") private var autoSaveInterval = 30
     @AppStorage("rememberLastPaper") private var rememberLastPaper = true
     @AppStorage("showReadingProgress") private var showReadingProgress = true
+    @AppStorage("defaultZoom") private var defaultZoom = 100
+    @AppStorage("continuousScroll") private var continuousScroll = true
+    @AppStorage("confirmDelete") private var confirmDelete = true
+    @AppStorage("showThumbnails") private var showThumbnails = true
 
     var body: some View {
         Form {
@@ -702,25 +712,66 @@ struct GeneralSettingsView: View {
 
                 Toggle("Remember last opened paper", isOn: $rememberLastPaper)
                 Toggle("Show reading progress", isOn: $showReadingProgress)
+                Toggle("Continuous scroll mode", isOn: $continuousScroll)
+
+                Picker("Default zoom level", selection: $defaultZoom) {
+                    Text("75%").tag(75)
+                    Text("100%").tag(100)
+                    Text("125%").tag(125)
+                    Text("150%").tag(150)
+                    Text("Fit Width").tag(0)
+                }
             } header: {
                 Text("Reading")
             }
 
             Section {
-                HStack {
-                    Text("Library Location")
-                    Spacer()
-                    Text("~/Documents/Pedef")
+                Toggle("Show page thumbnails", isOn: $showThumbnails)
+                Toggle("Confirm before deleting papers", isOn: $confirmDelete)
+            } header: {
+                Text("Library")
+            }
+
+            Section {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Data Location")
+                        .font(.subheadline)
+                    Text(getDataLocation())
+                        .font(.caption)
                         .foregroundStyle(.secondary)
-                    Button("Change...") { }
-                        .buttonStyle(.link)
+                        .textSelection(.enabled)
                 }
+
+                Button("Show in Finder") {
+                    showDataInFinder()
+                }
+                .buttonStyle(.link)
             } header: {
                 Text("Storage")
+            } footer: {
+                Text("Papers and annotations are stored securely using SwiftData.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             }
         }
         .formStyle(.grouped)
         .padding()
+    }
+
+    private func getDataLocation() -> String {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.pedef.app"
+        return appSupport?.appendingPathComponent(bundleID).path ?? "Unknown"
+    }
+
+    private func showDataInFinder() {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.pedef.app"
+        if let url = appSupport?.appendingPathComponent(bundleID) {
+            // Create directory if it doesn't exist
+            try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
+        }
     }
 }
 
@@ -728,7 +779,11 @@ struct AgentSettingsView: View {
     @AppStorage("agentEnabled") private var agentEnabled = true
     @AppStorage("summaryLength") private var summaryLength = "medium"
     @AppStorage("citationStyle") private var citationStyle = "apa"
-    @State private var apiKey = ""
+    @StateObject private var keychainService = KeychainService.shared
+    @State private var apiKeyInput = ""
+    @State private var showAPIKey = false
+    @State private var isSaving = false
+    @State private var saveMessage: String?
 
     var body: some View {
         Form {
@@ -755,16 +810,115 @@ struct AgentSettingsView: View {
             }
 
             Section {
-                SecureField("API Key", text: $apiKey, prompt: Text("sk-ant-..."))
+                HStack {
+                    if showAPIKey {
+                        TextField("API Key", text: $apiKeyInput, prompt: Text("sk-ant-..."))
+                            .textFieldStyle(.plain)
+                    } else {
+                        SecureField("API Key", text: $apiKeyInput, prompt: Text("sk-ant-..."))
+                            .textFieldStyle(.plain)
+                    }
+
+                    Button {
+                        showAPIKey.toggle()
+                    } label: {
+                        Image(systemName: showAPIKey ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                HStack {
+                    if keychainService.hasAPIKey {
+                        Label("API key configured", systemImage: "checkmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(.green)
+                    } else {
+                        Label("No API key configured", systemImage: "exclamationmark.circle")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+
+                    Spacer()
+
+                    if !apiKeyInput.isEmpty {
+                        Button("Save") {
+                            saveAPIKey()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .disabled(isSaving)
+                    }
+
+                    if keychainService.hasAPIKey {
+                        Button("Clear") {
+                            clearAPIKey()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+
+                if let message = saveMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(message.contains("Error") ? .red : .green)
+                }
+
                 Text("Get your API key from console.anthropic.com")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Text("Your API key is stored securely in the system Keychain.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
             } header: {
                 Text("Anthropic API")
             }
         }
         .formStyle(.grouped)
         .padding()
+        .onAppear {
+            // Load masked version if key exists
+            if keychainService.hasAPIKey {
+                apiKeyInput = ""
+            }
+        }
+    }
+
+    private func saveAPIKey() {
+        let trimmedKey = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !trimmedKey.isEmpty else {
+            saveMessage = "Error: Please enter an API key"
+            return
+        }
+
+        guard KeychainService.isValidAPIKeyFormat(trimmedKey) else {
+            saveMessage = "Error: Invalid API key format. Should start with 'sk-ant-'"
+            return
+        }
+
+        isSaving = true
+        keychainService.anthropicAPIKey = trimmedKey
+        apiKeyInput = ""
+        saveMessage = "API key saved securely"
+        isSaving = false
+
+        // Clear message after delay
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            saveMessage = nil
+        }
+    }
+
+    private func clearAPIKey() {
+        keychainService.clearAPIKey()
+        apiKeyInput = ""
+        saveMessage = "API key cleared"
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            saveMessage = nil
+        }
     }
 }
 

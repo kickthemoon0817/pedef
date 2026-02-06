@@ -1,10 +1,12 @@
 import Foundation
 import SwiftData
+import OSLog
 
 /// Service for managing tags and paper-tag relationships
 @MainActor
 final class TagService: ObservableObject {
     private var modelContext: ModelContext?
+    private let logger = Logger(subsystem: "com.pedef.app", category: "tag-service")
 
     @Published var allTags: [Tag] = []
     @Published var recentTags: [Tag] = []
@@ -26,10 +28,12 @@ final class TagService: ObservableObject {
             throw TagServiceError.notConfigured
         }
 
-        let normalizedName = name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedName.isEmpty else {
-            throw TagServiceError.invalidTagName
+        // Validate tag name
+        if let validationError = ValidationHelper.validateTagName(name) {
+            throw TagServiceError.validationFailed(validationError)
         }
+
+        let normalizedName = name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Check if tag already exists
         if let existingTag = findTag(named: normalizedName) {
@@ -207,7 +211,7 @@ final class TagService: ObservableObject {
             popularTags = topTags(limit: 5)
             recentTags = Array(tagsByDate().prefix(5))
         } catch {
-            print("Failed to fetch tags: \(error)")
+            logger.error("Failed to fetch tags: \(error.localizedDescription)")
         }
     }
 }
@@ -219,6 +223,7 @@ enum TagServiceError: LocalizedError {
     case invalidTagName
     case tagNotFound
     case tagAlreadyExists
+    case validationFailed(ValidationError)
 
     var errorDescription: String? {
         switch self {
@@ -230,6 +235,8 @@ enum TagServiceError: LocalizedError {
             return "Tag not found"
         case .tagAlreadyExists:
             return "A tag with this name already exists"
+        case .validationFailed(let error):
+            return error.errorDescription
         }
     }
 }

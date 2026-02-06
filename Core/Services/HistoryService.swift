@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Combine
+import OSLog
 
 /// Service for managing user action history
 @MainActor
@@ -11,6 +12,8 @@ final class HistoryService: ObservableObject {
     private var modelContext: ModelContext?
     private var undoStack: [ActionHistory] = []
     private var redoStack: [ActionHistory] = []
+
+    private let logger = Logger(subsystem: "com.pedef.app", category: "history-service")
 
     private let maxUndoStackSize = 100
     private let recentActionsLimit = 50
@@ -159,43 +162,67 @@ final class HistoryService: ObservableObject {
         forPaper paperId: UUID,
         limit: Int = 100
     ) -> [ActionHistory] {
+        guard let modelContext else { return [] }
         let descriptor = FetchDescriptor<ActionHistory>(
             predicate: #Predicate { $0.paperId == paperId },
             sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
         )
-        return (try? modelContext?.fetch(descriptor).prefix(limit).map { $0 }) ?? []
+        do {
+            return Array(try modelContext.fetch(descriptor).prefix(limit))
+        } catch {
+            logger.error("Failed to fetch actions for paper: \(error.localizedDescription)")
+            return []
+        }
     }
 
     func getActions(
         ofType type: ActionType,
         limit: Int = 100
     ) -> [ActionHistory] {
+        guard let modelContext else { return [] }
         let typeRaw = type.rawValue
         let descriptor = FetchDescriptor<ActionHistory>(
             predicate: #Predicate { $0.actionTypeRawValue == typeRaw },
             sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
         )
-        return (try? modelContext?.fetch(descriptor).prefix(limit).map { $0 }) ?? []
+        do {
+            return Array(try modelContext.fetch(descriptor).prefix(limit))
+        } catch {
+            logger.error("Failed to fetch actions by type: \(error.localizedDescription)")
+            return []
+        }
     }
 
     func getActions(
         inDateRange range: ClosedRange<Date>,
         limit: Int = 100
     ) -> [ActionHistory] {
+        guard let modelContext else { return [] }
         let start = range.lowerBound
         let end = range.upperBound
         let descriptor = FetchDescriptor<ActionHistory>(
             predicate: #Predicate { $0.timestamp >= start && $0.timestamp <= end },
             sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
         )
-        return (try? modelContext?.fetch(descriptor).prefix(limit).map { $0 }) ?? []
+        do {
+            return Array(try modelContext.fetch(descriptor).prefix(limit))
+        } catch {
+            logger.error("Failed to fetch actions by date range: \(error.localizedDescription)")
+            return []
+        }
     }
 
     func getSessions(limit: Int = 20) -> [ReadingSession] {
+        guard let modelContext else { return [] }
         let descriptor = FetchDescriptor<ReadingSession>(
             sortBy: [SortDescriptor(\.startTime, order: .reverse)]
         )
-        return (try? modelContext?.fetch(descriptor).prefix(limit).map { $0 }) ?? []
+        do {
+            return Array(try modelContext.fetch(descriptor).prefix(limit))
+        } catch {
+            logger.error("Failed to fetch sessions: \(error.localizedDescription)")
+            return []
+        }
     }
 
     // MARK: - Statistics
@@ -250,14 +277,28 @@ final class HistoryService: ObservableObject {
     // MARK: - Private
 
     private func loadRecentActions() {
+        guard let modelContext else {
+            recentActions = []
+            return
+        }
         let descriptor = FetchDescriptor<ActionHistory>(
             sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
         )
-        recentActions = (try? modelContext?.fetch(descriptor).prefix(recentActionsLimit).map { $0 }) ?? []
+        do {
+            recentActions = Array(try modelContext.fetch(descriptor).prefix(recentActionsLimit))
+        } catch {
+            logger.error("Failed to load recent actions: \(error.localizedDescription)")
+            recentActions = []
+        }
     }
 
     private func saveContext() {
-        try? modelContext?.save()
+        guard let modelContext else { return }
+        do {
+            try modelContext.save()
+        } catch {
+            logger.error("Failed to save history context: \(error.localizedDescription)")
+        }
     }
 }
 
