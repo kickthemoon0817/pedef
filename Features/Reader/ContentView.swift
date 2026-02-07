@@ -21,7 +21,6 @@ struct ContentView: View {
     @EnvironmentObject private var tagService: TagService
     @EnvironmentObject private var errorReporter: ErrorReporter
     @Environment(\.modelContext) private var modelContext
-    @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var isImporting = false
     @State private var isDragOver = false
 
@@ -240,7 +239,7 @@ struct SidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Custom sidebar header
+            // Custom sidebar header (also serves as window drag region)
             HStack {
                 Text("Pedef")
                     .font(.system(size: 15, weight: .bold, design: .rounded))
@@ -263,6 +262,7 @@ struct SidebarView: View {
             .padding(.horizontal, PedefTheme.Spacing.lg)
             .padding(.top, PedefTheme.Spacing.xl)
             .padding(.bottom, PedefTheme.Spacing.md)
+            .background(WindowDragArea())
 
             // Sidebar content
             ScrollView {
@@ -415,6 +415,8 @@ struct SidebarItem: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+        .accessibilityLabel(count != nil && count! > 0 ? "\(label), \(count!) items" : label)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -470,56 +472,6 @@ struct SidebarCollectionItem: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
-        .contextMenu {
-            Button("Rename") {
-                editedName = collection.name
-                isEditing = true
-            }
-
-            Menu("Change Color") {
-                ForEach(CollectionColor.allCases, id: \.self) { color in
-                    Button {
-                        collection.colorHex = color.hex
-                        collection.modifiedDate = Date()
-                    } label: {
-                        Label(color.displayName, systemImage: "circle.fill")
-                    }
-                }
-            }
-
-            Divider()
-
-            Button("Delete", role: .destructive) {
-                modelContext.delete(collection)
-            }
-        }
-    }
-}
-
-struct CollectionRow: View {
-    let collection: Collection
-    @Environment(\.modelContext) private var modelContext
-    @State private var isEditing = false
-    @State private var editedName = ""
-
-    var body: some View {
-        NavigationLink(value: AppState.SidebarItem.collection(collection.id)) {
-            Label {
-                if isEditing {
-                    TextField("Name", text: $editedName, onCommit: {
-                        collection.name = editedName
-                        isEditing = false
-                    })
-                    .textFieldStyle(.plain)
-                } else {
-                    Text(collection.name)
-                }
-            } icon: {
-                Image(systemName: collection.type.systemImage)
-                    .foregroundStyle(Color(hex: collection.colorHex ?? PedefTheme.CollectionPalette.colors[0].hex) ?? PedefTheme.Brand.indigo)
-            }
-        }
-        .badge(collection.paperCount)
         .contextMenu {
             Button("Rename") {
                 editedName = collection.name
@@ -721,6 +673,7 @@ struct LibraryView: View {
                     .fill(PedefTheme.TextColor.tertiary.opacity(0.15))
                     .frame(height: 1)
             }
+            .background(WindowDragArea())
 
             // Content
             if papers.isEmpty {
@@ -831,6 +784,7 @@ struct PaperGridView: View {
                     .contextMenu {
                         PaperContextMenu(paper: paper)
                     }
+                    .accessibilityElement(children: .combine)
                     .accessibilityLabel(paperAccessibilityLabel(for: paper))
                     .accessibilityHint("Double tap to open this paper")
                 }

@@ -1,4 +1,25 @@
 import SwiftUI
+import AppKit
+
+// MARK: - Window Drag Area
+
+/// An invisible NSView-backed drag region that enables window dragging
+/// from custom header bars when using .windowStyle(.hiddenTitleBar).
+struct WindowDragArea: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = WindowDragNSView()
+        view.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        view.setContentHuggingPriority(.defaultLow, for: .vertical)
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+private class WindowDragNSView: NSView {
+    override public func mouseDown(with event: NSEvent) {
+        window?.performDrag(with: event)
+    }
+}
 
 // MARK: - Card Modifier
 
@@ -24,23 +45,6 @@ struct PedefCardModifier: ViewModifier {
                 RoundedRectangle(cornerRadius: PedefTheme.Radius.lg)
                     .strokeBorder(isSelected ? PedefTheme.Brand.indigo : Color.clear, lineWidth: 2)
             }
-    }
-}
-
-// MARK: - Sidebar Row Modifier
-
-struct PedefSidebarRowModifier: ViewModifier {
-    var isSelected: Bool = false
-    var isHovering: Bool = false
-
-    func body(content: Content) -> some View {
-        content
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: PedefTheme.Radius.sm)
-                    .fill(isSelected
-                        ? PedefTheme.Brand.indigo.opacity(0.15)
-                        : (isHovering ? PedefTheme.Surface.hover : Color.clear))
-            )
     }
 }
 
@@ -146,6 +150,8 @@ struct PedefSearchField: View {
             RoundedRectangle(cornerRadius: PedefTheme.Radius.md)
                 .stroke(isFocused ? PedefTheme.Brand.indigo.opacity(0.5) : Color.clear, lineWidth: 1)
         )
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(placeholder)
     }
 }
 
@@ -154,10 +160,6 @@ struct PedefSearchField: View {
 extension View {
     func pedefCard(isHovering: Bool = false, isSelected: Bool = false) -> some View {
         modifier(PedefCardModifier(isHovering: isHovering, isSelected: isSelected))
-    }
-
-    func pedefSidebarRow(isSelected: Bool = false, isHovering: Bool = false) -> some View {
-        modifier(PedefSidebarRowModifier(isSelected: isSelected, isHovering: isHovering))
     }
 
     func pedefBar() -> some View {

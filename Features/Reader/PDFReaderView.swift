@@ -363,6 +363,7 @@ struct ReaderHeaderBar: View {
                 .fill(PedefTheme.TextColor.tertiary.opacity(0.15))
                 .frame(height: 1)
         }
+        .background(WindowDragArea())
     }
 }
 

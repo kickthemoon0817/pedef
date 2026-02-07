@@ -9,8 +9,16 @@ enum PedefTheme {
     // MARK: - Brand Colors
 
     enum Brand {
-        static let indigo = Color(nsColor: NSColor(red: 0.176, green: 0.208, blue: 0.380, alpha: 1.0))
-        static let purple = Color(nsColor: NSColor(red: 0.424, green: 0.204, blue: 0.514, alpha: 1.0))
+        /// Indigo: dark #2D3561 / light-on-dark #7B8ABF for WCAG contrast
+        static let indigo = Color(nsColor: .adaptive(
+            light: NSColor(red: 0.176, green: 0.208, blue: 0.380, alpha: 1.0),
+            dark:  NSColor(red: 0.482, green: 0.541, blue: 0.749, alpha: 1.0)
+        ))
+        /// Purple: dark #6C3483 / light-on-dark #B07CC6 for WCAG contrast
+        static let purple = Color(nsColor: .adaptive(
+            light: NSColor(red: 0.424, green: 0.204, blue: 0.514, alpha: 1.0),
+            dark:  NSColor(red: 0.690, green: 0.486, blue: 0.776, alpha: 1.0)
+        ))
 
         static let gradient = LinearGradient(
             colors: [indigo, purple],
@@ -91,8 +99,9 @@ enum PedefTheme {
             dark:  NSColor(red: 0.204, green: 0.827, blue: 0.600, alpha: 1.0)
         ))
 
+        /// Amber tone for better contrast on both light and dark backgrounds
         static let warning = Color(nsColor: .adaptive(
-            light: NSColor(red: 0.984, green: 0.749, blue: 0.141, alpha: 1.0),
+            light: NSColor(red: 0.820, green: 0.580, blue: 0.059, alpha: 1.0),
             dark:  NSColor(red: 0.961, green: 0.780, blue: 0.259, alpha: 1.0)
         ))
 
