@@ -77,6 +77,11 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .importPDF)) { _ in
             isImporting = true
         }
+        .onChange(of: appState.sidebarSelection) {
+            if appState.currentPaper != nil {
+                appState.closePaper()
+            }
+        }
         .onAppear {
             errorReporter.flushPending()
         }
