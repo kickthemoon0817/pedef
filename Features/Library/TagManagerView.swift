@@ -1,5 +1,4 @@
 import SwiftUI
-import SwiftUI
 import SwiftData
 
 /// View for managing all tags in the library
@@ -88,59 +87,55 @@ struct TagManagerView: View {
     // MARK: - Subviews
 
     private var headerView: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: PedefTheme.Spacing.md) {
             HStack {
                 Text("Tags")
-                    .font(.title2)
-                    .fontWeight(.semibold)
+                    .font(PedefTheme.Typography.title3)
+                    .foregroundStyle(PedefTheme.TextColor.primary)
+
+                Text("\(tagService.allTags.count)")
+                    .font(PedefTheme.Typography.caption)
+                    .foregroundStyle(PedefTheme.TextColor.tertiary)
+                    .padding(.horizontal, PedefTheme.Spacing.sm)
+                    .padding(.vertical, PedefTheme.Spacing.xxxs)
+                    .background(PedefTheme.Surface.hover, in: Capsule())
 
                 Spacer()
-
-                Text("\(tagService.allTags.count) tags")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
-            HStack {
+            HStack(spacing: PedefTheme.Spacing.md) {
                 // Search
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField("Search tags...", text: $searchQuery)
-                        .textFieldStyle(.plain)
-                        .focused($isSearchFocused)
-                        .accessibilityLabel("Search tags")
-                    if !searchQuery.isEmpty {
-                        Button(action: { searchQuery = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
+                PedefSearchField(text: $searchQuery, placeholder: "Search tags...")
+
+                // Sort buttons
+                HStack(spacing: 2) {
+                    ForEach(TagSortOrder.allCases, id: \.self) { order in
+                        Button {
+                            withAnimation(PedefTheme.Animation.quick) {
+                                sortOrder = order
+                            }
+                        } label: {
+                            Text(order.rawValue)
+                                .font(PedefTheme.Typography.caption)
+                                .foregroundStyle(sortOrder == order ? PedefTheme.Brand.indigo : PedefTheme.TextColor.tertiary)
+                                .padding(.horizontal, PedefTheme.Spacing.sm)
+                                .padding(.vertical, PedefTheme.Spacing.xs)
+                                .background(
+                                    RoundedRectangle(cornerRadius: PedefTheme.Radius.xs)
+                                        .fill(sortOrder == order ? PedefTheme.Brand.indigo.opacity(0.12) : Color.clear)
+                                )
                         }
                         .buttonStyle(.plain)
-                        .help("Clear search")
                     }
                 }
-                .padding(8)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(nsColor: .textBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(isSearchFocused ? Color.accentColor : Color.gray.opacity(0.3), lineWidth: 1)
-                )
-
-                // Sort picker
-                Picker("Sort", selection: $sortOrder) {
-                    ForEach(TagSortOrder.allCases, id: \.self) { order in
-                        Text(order.rawValue).tag(order)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 200)
+                .padding(3)
+                .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
                 .help("Sort tags")
             }
         }
-        .padding()
+        .padding(.horizontal, PedefTheme.Spacing.xl)
+        .padding(.vertical, PedefTheme.Spacing.md)
+        .background(PedefTheme.Surface.bar)
     }
 
     private var emptyStateView: some View {
@@ -167,7 +162,7 @@ struct TagManagerView: View {
                         Button(action: { createSuggestedTag(suggestion) }) {
                             HStack(spacing: 4) {
                                 Circle()
-                                    .fill(Color(hex: suggestion.color) ?? .accentColor)
+                                    .fill(Color(hex: suggestion.color) ?? PedefTheme.Brand.indigo)
                                     .frame(width: 8, height: 8)
                                 Text(suggestion.displayName)
                                     .font(.caption)
@@ -185,11 +180,11 @@ struct TagManagerView: View {
             }
             .padding()
             .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(nsColor: .controlBackgroundColor))
+                RoundedRectangle(cornerRadius: PedefTheme.Radius.lg)
+                    .fill(PedefTheme.Surface.elevated)
             )
         }
-        .padding(40)
+        .padding(PedefTheme.Spacing.xxxxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -219,23 +214,30 @@ struct TagManagerView: View {
     }
 
     private var editTagSheet: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: PedefTheme.Spacing.xl) {
             Text("Edit Tag")
-                .font(.headline)
+                .font(PedefTheme.Typography.headline)
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: PedefTheme.Spacing.sm) {
                 Text("Name")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(PedefTheme.Typography.caption)
+                    .foregroundStyle(PedefTheme.TextColor.secondary)
 
                 TextField("Tag name", text: $editTagName)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .font(PedefTheme.Typography.body)
+                    .padding(PedefTheme.Spacing.sm)
+                    .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: PedefTheme.Radius.sm)
+                            .stroke(PedefTheme.Brand.indigo.opacity(0.5), lineWidth: 1)
+                    )
             }
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: PedefTheme.Spacing.sm) {
                 Text("Color")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(PedefTheme.Typography.caption)
+                    .foregroundStyle(PedefTheme.TextColor.secondary)
 
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(32), spacing: 8), count: 5), spacing: 8) {
                     ForEach(Tag.predefinedColors, id: \.self) { color in
@@ -245,7 +247,7 @@ struct TagManagerView: View {
                                 .frame(width: 28, height: 28)
                                 .overlay(
                                     Circle()
-                                        .stroke(Color.primary, lineWidth: editTagColor == color ? 2 : 0)
+                                        .stroke(editTagColor == color ? PedefTheme.Brand.indigo : Color.clear, lineWidth: 2)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -256,21 +258,21 @@ struct TagManagerView: View {
             // Preview
             HStack {
                 Text("Preview:")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(PedefTheme.Typography.caption)
+                    .foregroundStyle(PedefTheme.TextColor.secondary)
 
                 HStack(spacing: 4) {
                     Circle()
-                        .fill(Color(hex: editTagColor) ?? .accentColor)
+                        .fill(Color(hex: editTagColor) ?? PedefTheme.Brand.indigo)
                         .frame(width: 8, height: 8)
                     Text(editTagName.isEmpty ? "tag name" : editTagName)
-                        .font(.caption)
+                        .font(PedefTheme.Typography.caption)
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
+                .padding(.horizontal, PedefTheme.Spacing.sm)
+                .padding(.vertical, PedefTheme.Spacing.xxs)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill((Color(hex: editTagColor) ?? .accentColor).opacity(0.15))
+                    RoundedRectangle(cornerRadius: PedefTheme.Radius.pill)
+                        .fill((Color(hex: editTagColor) ?? PedefTheme.Brand.indigo).opacity(0.15))
                 )
             }
 
@@ -278,18 +280,28 @@ struct TagManagerView: View {
                 Button("Cancel") {
                     isEditingTag = false
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(PedefTheme.TextColor.secondary)
                 .keyboardShortcut(.cancelAction)
 
                 Spacer()
 
-                Button("Save") {
+                Button {
                     saveTagEdits()
+                } label: {
+                    Text("Save")
+                        .font(PedefTheme.Typography.subheadline)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, PedefTheme.Spacing.lg)
+                        .padding(.vertical, PedefTheme.Spacing.xs)
+                        .background(editTagName.isEmpty ? PedefTheme.TextColor.tertiary : PedefTheme.Brand.indigo, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
                 }
+                .buttonStyle(.plain)
                 .keyboardShortcut(.defaultAction)
                 .disabled(editTagName.isEmpty)
             }
         }
-        .padding(24)
+        .padding(PedefTheme.Spacing.xxl)
         .frame(width: 300)
     }
 
@@ -377,7 +389,7 @@ struct TagRowView: View {
         HStack(spacing: 12) {
             // Color indicator
             Circle()
-                .fill(Color(hex: tag.colorHex) ?? .accentColor)
+                .fill(Color(hex: tag.colorHex) ?? PedefTheme.Brand.indigo)
                 .frame(width: 12, height: 12)
 
             // Tag name
@@ -419,8 +431,8 @@ struct TagRowView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 8)
-                .fill(isSelected ? Color.accentColor.opacity(0.1) : (isHovered ? Color.secondary.opacity(0.1) : Color.clear))
+            RoundedRectangle(cornerRadius: PedefTheme.Radius.md)
+                .fill(isSelected ? PedefTheme.Brand.indigo.opacity(0.10) : (isHovered ? PedefTheme.Surface.hover : Color.clear))
         )
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
