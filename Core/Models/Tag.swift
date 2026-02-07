@@ -35,18 +35,7 @@ final class Tag {
 // MARK: - Predefined Tags
 
 extension Tag {
-    static let predefinedColors: [String] = [
-        "#FF6B6B",  // Red
-        "#4ECDC4",  // Teal
-        "#45B7D1",  // Blue
-        "#96CEB4",  // Green
-        "#FFEAA7",  // Yellow
-        "#DDA0DD",  // Plum
-        "#98D8C8",  // Mint
-        "#F7DC6F",  // Gold
-        "#BB8FCE",  // Purple
-        "#85C1E9",  // Sky
-    ]
+    static let predefinedColors: [String] = PedefTheme.TagPalette.colors
 
     static func randomColor() -> String {
         predefinedColors.randomElement() ?? "#007AFF"
@@ -73,16 +62,16 @@ enum TagSuggestion: String, CaseIterable {
 
     var color: String {
         switch self {
-        case .toRead: return "#45B7D1"
-        case .reading: return "#F7DC6F"
-        case .finished: return "#96CEB4"
-        case .important: return "#FF6B6B"
-        case .reference: return "#BB8FCE"
-        case .review: return "#4ECDC4"
-        case .methodology: return "#85C1E9"
-        case .theory: return "#DDA0DD"
-        case .empirical: return "#98D8C8"
-        case .metaAnalysis: return "#FFEAA7"
+        case .toRead: return "#3B82F6"       // Blue
+        case .reading: return "#EAB308"      // Yellow
+        case .finished: return "#22C55E"     // Green
+        case .important: return "#F43F5E"    // Rose
+        case .reference: return "#8B5CF6"    // Violet
+        case .review: return "#14B8A6"       // Teal
+        case .methodology: return "#6366F1"  // Indigo
+        case .theory: return "#EC4899"       // Pink
+        case .empirical: return "#F97316"    // Orange
+        case .metaAnalysis: return "#EF4444" // Red
         }
     }
 }
