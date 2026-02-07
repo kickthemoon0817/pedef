@@ -38,7 +38,7 @@ extension Tag {
     static let predefinedColors: [String] = PedefTheme.TagPalette.colors
 
     static func randomColor() -> String {
-        predefinedColors.randomElement() ?? "#007AFF"
+        predefinedColors.randomElement() ?? "#2D3561"
     }
 }
 

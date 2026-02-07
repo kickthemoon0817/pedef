@@ -29,8 +29,4 @@ extension Color {
         return String(format: "#%02X%02X%02X", r, g, b)
     }
 
-    /// Brand accent color — use as a migration bridge from `.accentColor`
-    static var brandAccent: Color {
-        PedefTheme.Brand.indigo
-    }
 }

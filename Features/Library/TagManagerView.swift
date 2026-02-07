@@ -9,7 +9,6 @@ struct TagManagerView: View {
     @EnvironmentObject private var errorReporter: ErrorReporter
 
     @State private var searchQuery = ""
-    @FocusState private var isSearchFocused: Bool
     @State private var sortOrder: TagSortOrder = .name
     @State private var selectedTag: Tag?
     @State private var isEditingTag = false
