@@ -41,6 +41,35 @@ struct TimelineView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // Custom header
+            HStack {
+                Text("Activity")
+                    .font(PedefTheme.Typography.title3)
+                    .foregroundStyle(PedefTheme.TextColor.primary)
+
+                Spacer()
+
+                Button {
+                    // Export history
+                } label: {
+                    HStack(spacing: PedefTheme.Spacing.xxs) {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 11, weight: .medium))
+                        Text("Export")
+                            .font(PedefTheme.Typography.caption)
+                    }
+                    .foregroundStyle(PedefTheme.TextColor.secondary)
+                    .padding(.horizontal, PedefTheme.Spacing.sm)
+                    .padding(.vertical, PedefTheme.Spacing.xs)
+                    .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
+                }
+                .buttonStyle(.plain)
+                .help("Export History")
+            }
+            .padding(.horizontal, PedefTheme.Spacing.xl)
+            .padding(.vertical, PedefTheme.Spacing.md)
+            .background(PedefTheme.Surface.bar)
+
             // Filters
             TimelineFilters(
                 selectedDateRange: $selectedDateRange,
@@ -68,17 +97,6 @@ struct TimelineView: View {
                 .padding()
             }
         }
-        .navigationTitle("History")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    // Export history
-                } label: {
-                    Image(systemName: "square.and.arrow.up")
-                }
-                .help("Export History")
-            }
-        }
     }
 
     private var filteredActions: [ActionHistory] {
@@ -104,26 +122,62 @@ struct TimelineFilters: View {
     @Binding var selectedCategory: ActionCategory?
 
     var body: some View {
-        HStack {
-            Picker("Time Range", selection: $selectedDateRange) {
+        HStack(spacing: PedefTheme.Spacing.lg) {
+            // Date range pills
+            HStack(spacing: 2) {
                 ForEach(TimelineView.DateRange.allCases, id: \.self) { range in
-                    Text(range.rawValue).tag(range)
+                    Button {
+                        withAnimation(PedefTheme.Animation.quick) {
+                            selectedDateRange = range
+                        }
+                    } label: {
+                        Text(range.rawValue)
+                            .font(PedefTheme.Typography.caption)
+                            .foregroundStyle(selectedDateRange == range ? PedefTheme.Brand.indigo : PedefTheme.TextColor.tertiary)
+                            .padding(.horizontal, PedefTheme.Spacing.sm)
+                            .padding(.vertical, PedefTheme.Spacing.xs)
+                            .background(
+                                RoundedRectangle(cornerRadius: PedefTheme.Radius.xs)
+                                    .fill(selectedDateRange == range ? PedefTheme.Brand.indigo.opacity(0.12) : Color.clear)
+                            )
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .frame(width: 120)
+            .padding(3)
+            .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
 
-            Picker("Category", selection: $selectedCategory) {
-                Text("All").tag(nil as ActionCategory?)
+            // Category filter
+            Menu {
+                Button("All") { selectedCategory = nil }
+                Divider()
                 ForEach(ActionCategory.allCases, id: \.self) { category in
-                    Label(category.displayName, systemImage: category.systemImage)
-                        .tag(category as ActionCategory?)
+                    Button {
+                        selectedCategory = category
+                    } label: {
+                        Label(category.displayName, systemImage: category.systemImage)
+                    }
                 }
+            } label: {
+                HStack(spacing: PedefTheme.Spacing.xxs) {
+                    Image(systemName: selectedCategory?.systemImage ?? "line.3.horizontal.decrease")
+                        .font(.system(size: 11, weight: .medium))
+                    Text(selectedCategory?.displayName ?? "All")
+                        .font(PedefTheme.Typography.caption)
+                }
+                .foregroundStyle(selectedCategory != nil ? PedefTheme.Brand.indigo : PedefTheme.TextColor.secondary)
+                .padding(.horizontal, PedefTheme.Spacing.sm)
+                .padding(.vertical, PedefTheme.Spacing.xs)
+                .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
             }
-            .frame(width: 120)
+            .menuStyle(.borderlessButton)
+            .fixedSize()
 
             Spacer()
         }
-        .padding()
+        .padding(.horizontal, PedefTheme.Spacing.xl)
+        .padding(.vertical, PedefTheme.Spacing.md)
+        .background(PedefTheme.Surface.bar)
     }
 }
 
@@ -139,7 +193,7 @@ struct StatsSummaryView: View {
     let stats: OverallStats
 
     var body: some View {
-        HStack(spacing: 24) {
+        HStack(spacing: PedefTheme.Spacing.xxl) {
             StatItem(
                 title: "Reading Time",
                 value: stats.formattedReadingTime,
@@ -165,7 +219,8 @@ struct StatsSummaryView: View {
             )
         }
         .padding()
-        .background(Color.secondary.opacity(0.05))
+        .background(PedefTheme.Surface.elevated)
+        .pedefShadow(PedefTheme.Shadow.sm)
     }
 }
 
@@ -175,17 +230,17 @@ struct StatItem: View {
     let icon: String
 
     var body: some View {
-        VStack(spacing: 4) {
+        VStack(spacing: PedefTheme.Spacing.xxs) {
             Image(systemName: icon)
                 .font(.title2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(PedefTheme.Brand.indigo)
 
             Text(value)
-                .font(.headline)
+                .font(PedefTheme.Typography.headline)
 
             Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(PedefTheme.Typography.caption)
+                .foregroundStyle(PedefTheme.TextColor.secondary)
         }
         .frame(minWidth: 80)
     }
@@ -298,8 +353,9 @@ struct SessionCard: View {
             }
         }
         .padding()
-        .background(Color.secondary.opacity(0.05))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(PedefTheme.Surface.elevated)
+        .clipShape(RoundedRectangle(cornerRadius: PedefTheme.Radius.md))
+        .pedefShadow(PedefTheme.Shadow.card)
     }
 }
 
@@ -329,11 +385,11 @@ struct ActionRow: View {
 
     private var categoryColor: Color {
         switch action.category {
-        case .reading: return .blue
-        case .annotation: return .yellow
-        case .library: return .green
-        case .agent: return .purple
-        case .session: return .gray
+        case .reading: return PedefTheme.Brand.indigo
+        case .annotation: return PedefTheme.Semantic.warning
+        case .library: return PedefTheme.Semantic.success
+        case .agent: return PedefTheme.Brand.purple
+        case .session: return PedefTheme.TextColor.tertiary
         }
     }
 }

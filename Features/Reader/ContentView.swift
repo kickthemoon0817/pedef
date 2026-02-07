@@ -4,31 +4,15 @@ import UniformTypeIdentifiers
 
 // MARK: - Collection Colors
 
-enum CollectionColor: String, CaseIterable {
-    case blue = "#007AFF"
-    case purple = "#AF52DE"
-    case pink = "#FF2D55"
-    case red = "#FF3B30"
-    case orange = "#FF9500"
-    case yellow = "#FFCC00"
-    case green = "#34C759"
-    case teal = "#5AC8FA"
-    case gray = "#8E8E93"
+enum CollectionColor: CaseIterable {
+    case indigo, purple, blue, teal, green, yellow, orange, pink, gray
 
-    var hex: String { rawValue }
+    var hex: String {
+        PedefTheme.CollectionPalette.colors[CollectionColor.allCases.firstIndex(of: self) ?? 0].hex
+    }
 
     var displayName: String {
-        switch self {
-        case .blue: return "Blue"
-        case .purple: return "Purple"
-        case .pink: return "Pink"
-        case .red: return "Red"
-        case .orange: return "Orange"
-        case .yellow: return "Yellow"
-        case .green: return "Green"
-        case .teal: return "Teal"
-        case .gray: return "Gray"
-        }
+        PedefTheme.CollectionPalette.colors[CollectionColor.allCases.firstIndex(of: self) ?? 0].name
     }
 }
 
@@ -37,26 +21,29 @@ struct ContentView: View {
     @EnvironmentObject private var tagService: TagService
     @EnvironmentObject private var errorReporter: ErrorReporter
     @Environment(\.modelContext) private var modelContext
-    @State private var columnVisibility = NavigationSplitViewVisibility.all
     @State private var isImporting = false
     @State private var isDragOver = false
 
     var body: some View {
-        NavigationSplitView(columnVisibility: $columnVisibility) {
+        HStack(spacing: 0) {
+            // Custom sidebar
             SidebarView()
-                .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 300)
-        } detail: {
-            detailContent
+                .frame(width: 240)
+
+            // Thin custom divider
+            Rectangle()
+                .fill(PedefTheme.TextColor.tertiary.opacity(0.15))
+                .frame(width: 1)
+
+            // Detail content
+            VStack(spacing: 0) {
+                detailContent
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(PedefTheme.Surface.primary)
             .overlay {
                 if isDragOver {
                     DragOverlay()
-                }
-            }
-        }
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
-                if appState.currentPaper != nil {
-                    ReaderToolbar()
                 }
             }
         }
@@ -212,19 +199,19 @@ struct ContentView: View {
 struct DragOverlay: View {
     var body: some View {
         ZStack {
-            Color.accentColor.opacity(0.1)
+            PedefTheme.Brand.indigo.opacity(0.10)
 
-            VStack(spacing: 16) {
+            VStack(spacing: PedefTheme.Spacing.lg) {
                 Image(systemName: "arrow.down.doc.fill")
                     .font(.system(size: 48))
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(PedefTheme.Brand.indigo)
 
                 Text("Drop PDFs to Import")
-                    .font(.title2.weight(.medium))
+                    .font(PedefTheme.Typography.title3)
                     .foregroundStyle(.primary)
             }
-            .padding(40)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+            .padding(PedefTheme.Spacing.xxxxl)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.xl))
         }
         .ignoresSafeArea()
     }
@@ -251,77 +238,117 @@ struct SidebarView: View {
     }
 
     var body: some View {
-        List(selection: $appState.sidebarSelection) {
-            Section {
-                NavigationLink(value: AppState.SidebarItem.library) {
-                    Label("All Papers", systemImage: "doc.on.doc.fill")
-                }
-                .badge(papers.count)
+        VStack(spacing: 0) {
+            // Custom sidebar header (also serves as window drag region)
+            HStack {
+                Text("Pedef")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(PedefTheme.Brand.indigo)
 
-                NavigationLink(value: AppState.SidebarItem.recentlyRead) {
-                    Label("Recently Read", systemImage: "clock.fill")
-                }
-                .badge(recentPapersCount)
+                Spacer()
 
-                NavigationLink(value: AppState.SidebarItem.favorites) {
-                    Label("Favorites", systemImage: "star.fill")
-                }
-                .badge(favoritesCount)
-
-                NavigationLink(value: AppState.SidebarItem.readingList) {
-                    Label("Reading List", systemImage: "books.vertical.fill")
-                }
-
-                NavigationLink(value: AppState.SidebarItem.tags) {
-                    Label("Tags", systemImage: "tag.fill")
-                }
-                .badge(tags.count)
-            } header: {
-                Text("Library")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                ForEach(collections.filter { $0.parent == nil }) { collection in
-                    CollectionRow(collection: collection)
-                }
-
-                Button {
-                    createCollection()
-                } label: {
-                    Label("New Collection", systemImage: "plus.circle")
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-            } header: {
-                Text("Collections")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                NavigationLink(value: AppState.SidebarItem.history) {
-                    Label("Activity", systemImage: "clock.arrow.circlepath")
-                }
-            } header: {
-                Text("Tools")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .listStyle(.sidebar)
-        .navigationTitle("Pedef")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
                 Button {
                     NotificationCenter.default.post(name: .importPDF, object: nil)
                 } label: {
                     Image(systemName: "plus")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(PedefTheme.Brand.indigo)
+                        .frame(width: 24, height: 24)
+                        .background(PedefTheme.Brand.indigo.opacity(0.10), in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
                 }
+                .buttonStyle(.plain)
                 .help("Import PDF (⇧⌘I)")
             }
+            .padding(.horizontal, PedefTheme.Spacing.lg)
+            .padding(.top, PedefTheme.Spacing.xl)
+            .padding(.bottom, PedefTheme.Spacing.md)
+            .background(WindowDragArea())
+
+            // Sidebar content
+            ScrollView {
+                VStack(alignment: .leading, spacing: PedefTheme.Spacing.xxs) {
+                    // LIBRARY section
+                    SidebarSectionHeader(title: "LIBRARY")
+
+                    SidebarItem(
+                        icon: "doc.on.doc.fill",
+                        label: "All Papers",
+                        count: papers.count,
+                        isSelected: appState.sidebarSelection == .library
+                    ) { appState.sidebarSelection = .library }
+
+                    SidebarItem(
+                        icon: "clock.fill",
+                        label: "Recently Read",
+                        count: recentPapersCount,
+                        isSelected: appState.sidebarSelection == .recentlyRead
+                    ) { appState.sidebarSelection = .recentlyRead }
+
+                    SidebarItem(
+                        icon: "star.fill",
+                        label: "Favorites",
+                        count: favoritesCount,
+                        isSelected: appState.sidebarSelection == .favorites
+                    ) { appState.sidebarSelection = .favorites }
+
+                    SidebarItem(
+                        icon: "books.vertical.fill",
+                        label: "Reading List",
+                        isSelected: appState.sidebarSelection == .readingList
+                    ) { appState.sidebarSelection = .readingList }
+
+                    SidebarItem(
+                        icon: "tag.fill",
+                        label: "Tags",
+                        count: tags.count,
+                        isSelected: appState.sidebarSelection == .tags
+                    ) { appState.sidebarSelection = .tags }
+
+                    // COLLECTIONS section
+                    SidebarSectionHeader(title: "COLLECTIONS")
+                        .padding(.top, PedefTheme.Spacing.sm)
+
+                    ForEach(collections.filter { $0.parent == nil }) { collection in
+                        SidebarCollectionItem(
+                            collection: collection,
+                            isSelected: appState.sidebarSelection == .collection(collection.id)
+                        ) {
+                            appState.sidebarSelection = .collection(collection.id)
+                        }
+                    }
+
+                    Button {
+                        createCollection()
+                    } label: {
+                        HStack(spacing: PedefTheme.Spacing.sm) {
+                            Image(systemName: "plus.circle")
+                                .font(.system(size: 14))
+                                .foregroundStyle(PedefTheme.TextColor.tertiary)
+                                .frame(width: 20)
+                            Text("New Collection")
+                                .font(PedefTheme.Typography.callout)
+                                .foregroundStyle(PedefTheme.TextColor.tertiary)
+                        }
+                        .padding(.horizontal, PedefTheme.Spacing.md)
+                        .padding(.vertical, PedefTheme.Spacing.xs)
+                    }
+                    .buttonStyle(.plain)
+
+                    // TOOLS section
+                    SidebarSectionHeader(title: "TOOLS")
+                        .padding(.top, PedefTheme.Spacing.sm)
+
+                    SidebarItem(
+                        icon: "clock.arrow.circlepath",
+                        label: "Activity",
+                        isSelected: appState.sidebarSelection == .history
+                    ) { appState.sidebarSelection = .history }
+                }
+                .padding(.horizontal, PedefTheme.Spacing.sm)
+                .padding(.bottom, PedefTheme.Spacing.lg)
+            }
         }
+        .background(PedefTheme.Surface.sidebar)
     }
 
     private func createCollection() {
@@ -330,30 +357,121 @@ struct SidebarView: View {
     }
 }
 
-struct CollectionRow: View {
+// MARK: - Custom Sidebar Components
+
+struct SidebarSectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(PedefTheme.Typography.caption2)
+            .tracking(1.2)
+            .foregroundStyle(PedefTheme.TextColor.tertiary)
+            .padding(.horizontal, PedefTheme.Spacing.md)
+            .padding(.top, PedefTheme.Spacing.xs)
+            .padding(.bottom, PedefTheme.Spacing.xxs)
+    }
+}
+
+struct SidebarItem: View {
+    let icon: String
+    let label: String
+    var count: Int? = nil
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: PedefTheme.Spacing.sm) {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .foregroundStyle(isSelected ? PedefTheme.Brand.indigo : PedefTheme.TextColor.secondary)
+                    .frame(width: 20)
+
+                Text(label)
+                    .font(PedefTheme.Typography.callout)
+                    .foregroundStyle(isSelected ? PedefTheme.TextColor.primary : PedefTheme.TextColor.secondary)
+
+                Spacer()
+
+                if let count = count, count > 0 {
+                    Text("\(count)")
+                        .font(PedefTheme.Typography.caption2)
+                        .foregroundStyle(PedefTheme.TextColor.tertiary)
+                        .padding(.horizontal, PedefTheme.Spacing.xs)
+                        .padding(.vertical, 2)
+                        .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.xs))
+                }
+            }
+            .padding(.horizontal, PedefTheme.Spacing.md)
+            .padding(.vertical, PedefTheme.Spacing.xs)
+            .background(
+                RoundedRectangle(cornerRadius: PedefTheme.Radius.sm)
+                    .fill(isSelected ? PedefTheme.Surface.selected : (isHovered ? PedefTheme.Surface.hover : Color.clear))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .accessibilityLabel(count != nil && count! > 0 ? "\(label), \(count!) items" : label)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+struct SidebarCollectionItem: View {
     let collection: Collection
+    let isSelected: Bool
+    let action: () -> Void
+
+    @State private var isHovered = false
     @Environment(\.modelContext) private var modelContext
     @State private var isEditing = false
     @State private var editedName = ""
 
     var body: some View {
-        NavigationLink(value: AppState.SidebarItem.collection(collection.id)) {
-            Label {
+        Button(action: action) {
+            HStack(spacing: PedefTheme.Spacing.sm) {
+                Image(systemName: collection.type.systemImage)
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color(hex: collection.colorHex ?? PedefTheme.CollectionPalette.colors[0].hex) ?? PedefTheme.Brand.indigo)
+                    .frame(width: 20)
+
                 if isEditing {
                     TextField("Name", text: $editedName, onCommit: {
                         collection.name = editedName
                         isEditing = false
                     })
                     .textFieldStyle(.plain)
+                    .font(PedefTheme.Typography.callout)
                 } else {
                     Text(collection.name)
+                        .font(PedefTheme.Typography.callout)
+                        .foregroundStyle(isSelected ? PedefTheme.TextColor.primary : PedefTheme.TextColor.secondary)
                 }
-            } icon: {
-                Image(systemName: collection.type.systemImage)
-                    .foregroundStyle(Color(hex: collection.colorHex ?? "#007AFF") ?? .accentColor)
+
+                Spacer()
+
+                if collection.paperCount > 0 {
+                    Text("\(collection.paperCount)")
+                        .font(PedefTheme.Typography.caption2)
+                        .foregroundStyle(PedefTheme.TextColor.tertiary)
+                        .padding(.horizontal, PedefTheme.Spacing.xs)
+                        .padding(.vertical, 2)
+                        .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.xs))
+                }
             }
+            .padding(.horizontal, PedefTheme.Spacing.md)
+            .padding(.vertical, PedefTheme.Spacing.xs)
+            .background(
+                RoundedRectangle(cornerRadius: PedefTheme.Radius.sm)
+                    .fill(isSelected ? PedefTheme.Surface.selected : (isHovered ? PedefTheme.Surface.hover : Color.clear))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
         }
-        .badge(collection.paperCount)
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
         .contextMenu {
             Button("Rename") {
                 editedName = collection.name
@@ -376,66 +494,6 @@ struct CollectionRow: View {
             Button("Delete", role: .destructive) {
                 modelContext.delete(collection)
             }
-        }
-    }
-}
-
-// MARK: - Reader Toolbar
-
-struct ReaderToolbar: View {
-    @EnvironmentObject private var appState: AppState
-    @State private var showHighlightColors = false
-
-    var body: some View {
-        Group {
-            // Highlight with color picker
-            Menu {
-                ForEach(AnnotationColor.allCases, id: \.self) { color in
-                    Button {
-                        // Create highlight with this color
-                        NotificationCenter.default.post(name: .highlightSelection, object: color)
-                    } label: {
-                        Label(color.displayName, systemImage: "circle.fill")
-                    }
-                }
-            } label: {
-                Image(systemName: "highlighter")
-            } primaryAction: {
-                NotificationCenter.default.post(name: .highlightSelection, object: nil)
-            }
-            .help("Highlight Selection (⌘H)")
-
-            Button {
-                NotificationCenter.default.post(name: .addNote, object: nil)
-            } label: {
-                Image(systemName: "note.text.badge.plus")
-            }
-            .help("Add Note (⇧⌘N)")
-
-            Button {
-                NotificationCenter.default.post(name: .addBookmark, object: nil)
-            } label: {
-                Image(systemName: "bookmark")
-            }
-            .help("Add Bookmark (⇧⌘B)")
-
-            Divider()
-
-            Button {
-                appState.isAgentPanelVisible.toggle()
-            } label: {
-                Image(systemName: "sparkles")
-                    .symbolRenderingMode(.multicolor)
-            }
-            .help("Ask AI Assistant (⌘K)")
-
-            Button {
-                appState.closePaper()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .symbolRenderingMode(.hierarchical)
-            }
-            .help("Close Paper")
         }
     }
 }
@@ -551,22 +609,27 @@ struct LibraryView: View {
     }
 
     var body: some View {
-        Group {
-            if papers.isEmpty {
-                EmptyLibraryView()
-            } else {
-                switch viewMode {
-                case .grid:
-                    PaperGridView(papers: filteredPapers, selection: $selectedPapers)
-                case .list:
-                    PaperListView(papers: filteredPapers, selection: $selectedPapers)
-                }
-            }
-        }
-        .searchable(text: $searchText, prompt: "Search papers, authors, keywords...")
-        .navigationTitle(libraryTitle)
-        .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
+        VStack(spacing: 0) {
+            // Custom branded header bar
+            HStack(spacing: PedefTheme.Spacing.md) {
+                Text(libraryTitle)
+                    .font(PedefTheme.Typography.title3)
+                    .foregroundStyle(PedefTheme.TextColor.primary)
+
+                Text("\(filteredPapers.count)")
+                    .font(PedefTheme.Typography.caption)
+                    .foregroundStyle(PedefTheme.TextColor.tertiary)
+                    .padding(.horizontal, PedefTheme.Spacing.sm)
+                    .padding(.vertical, PedefTheme.Spacing.xxxs)
+                    .background(PedefTheme.Surface.hover, in: Capsule())
+
+                Spacer()
+
+                // Search field
+                PedefSearchField(text: $searchText, placeholder: "Search papers...")
+                    .frame(maxWidth: 240)
+
+                // Sort button
                 Menu {
                     ForEach(SortOrder.allCases, id: \.self) { order in
                         Button {
@@ -580,17 +643,48 @@ struct LibraryView: View {
                         }
                     }
                 } label: {
-                    Image(systemName: "arrow.up.arrow.down")
+                    HStack(spacing: PedefTheme.Spacing.xxs) {
+                        Image(systemName: "arrow.up.arrow.down")
+                            .font(.system(size: 11, weight: .medium))
+                        Text(sortOrder.rawValue)
+                            .font(PedefTheme.Typography.caption)
+                    }
+                    .foregroundStyle(PedefTheme.TextColor.secondary)
+                    .padding(.horizontal, PedefTheme.Spacing.sm)
+                    .padding(.vertical, PedefTheme.Spacing.xs)
+                    .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
                 }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
                 .help("Sort Order")
 
-                Picker("View", selection: $viewMode) {
-                    ForEach(ViewMode.allCases, id: \.self) { mode in
-                        Image(systemName: mode.icon).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
+                // View mode toggle
+                PedefSegmentedPicker(
+                    selection: $viewMode,
+                    items: ViewMode.allCases.map { ($0, $0.icon) }
+                )
                 .help("View Mode")
+            }
+            .padding(.horizontal, PedefTheme.Spacing.xl)
+            .padding(.vertical, PedefTheme.Spacing.md)
+            .background(PedefTheme.Surface.bar)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(PedefTheme.TextColor.tertiary.opacity(0.15))
+                    .frame(height: 1)
+            }
+            .background(WindowDragArea())
+
+            // Content
+            if papers.isEmpty {
+                EmptyLibraryView()
+            } else {
+                switch viewMode {
+                case .grid:
+                    PaperGridView(papers: filteredPapers, selection: $selectedPapers)
+                case .list:
+                    PaperListView(papers: filteredPapers, selection: $selectedPapers)
+                }
             }
         }
     }
@@ -600,46 +694,50 @@ struct EmptyLibraryView: View {
     @State private var isHovering = false
 
     var body: some View {
-        VStack(spacing: 24) {
+        VStack(spacing: PedefTheme.Spacing.xxl) {
             Image(systemName: "doc.text.magnifyingglass")
                 .font(.system(size: 64))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(PedefTheme.Brand.indigo.opacity(0.3))
                 .symbolEffect(.pulse, options: .repeating)
 
-            VStack(spacing: 8) {
+            VStack(spacing: PedefTheme.Spacing.sm) {
                 Text("Your Library is Empty")
-                    .font(.title2.weight(.semibold))
+                    .font(PedefTheme.Typography.title2)
 
                 Text("Import PDFs to start organizing your research papers")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(PedefTheme.Typography.subheadline)
+                    .foregroundStyle(PedefTheme.TextColor.secondary)
                     .multilineTextAlignment(.center)
             }
 
-            VStack(spacing: 12) {
+            VStack(spacing: PedefTheme.Spacing.md) {
                 Button {
                     NotificationCenter.default.post(name: .importPDF, object: nil)
                 } label: {
                     Label("Import PDF", systemImage: "plus.circle.fill")
+                        .font(PedefTheme.Typography.headline)
+                        .foregroundStyle(.white)
                         .frame(minWidth: 160)
+                        .padding(.horizontal, PedefTheme.Spacing.xxl)
+                        .padding(.vertical, PedefTheme.Spacing.md)
+                        .background(PedefTheme.Brand.indigo, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.md))
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
+                .buttonStyle(.plain)
 
                 Text("or drag and drop files here")
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(PedefTheme.Typography.caption)
+                    .foregroundStyle(PedefTheme.TextColor.tertiary)
             }
 
             // Keyboard shortcut hints
-            HStack(spacing: 24) {
+            HStack(spacing: PedefTheme.Spacing.xxl) {
                 KeyboardShortcutHint(keys: "⇧⌘I", action: "Import")
                 KeyboardShortcutHint(keys: "⌘K", action: "AI Assistant")
             }
-            .padding(.top, 16)
+            .padding(.top, PedefTheme.Spacing.lg)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(PedefTheme.Surface.primary)
     }
 }
 
@@ -648,16 +746,16 @@ struct KeyboardShortcutHint: View {
     let action: String
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: PedefTheme.Spacing.xs) {
             Text(keys)
                 .font(.system(.caption, design: .monospaced))
-                .padding(.horizontal, 6)
+                .padding(.horizontal, PedefTheme.Spacing.xs)
                 .padding(.vertical, 3)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
+                .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.xs))
 
             Text(action)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(PedefTheme.Typography.caption)
+                .foregroundStyle(PedefTheme.TextColor.secondary)
         }
     }
 }
@@ -677,17 +775,18 @@ struct PaperGridView: View {
         ScrollView {
             LazyVGrid(columns: columns, spacing: 20) {
                 ForEach(papers) { paper in
-                    PaperCard(paper: paper, isSelected: selection.contains(paper.id))
-                        .onTapGesture {
-                            appState.openPaper(paper)
-                        }
-                        .contextMenu {
-                            PaperContextMenu(paper: paper)
-                        }
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel(paperAccessibilityLabel(for: paper))
-                        .accessibilityHint("Double tap to open this paper")
-                        .accessibilityAddTraits(.isButton)
+                    Button {
+                        appState.openPaper(paper)
+                    } label: {
+                        PaperCard(paper: paper, isSelected: selection.contains(paper.id))
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        PaperContextMenu(paper: paper)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(paperAccessibilityLabel(for: paper))
+                    .accessibilityHint("Double tap to open this paper")
                 }
             }
             .padding(20)
@@ -728,8 +827,8 @@ struct PaperCard: View {
         VStack(alignment: .leading, spacing: 0) {
             // Thumbnail
             ZStack(alignment: .topTrailing) {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.secondary.opacity(0.08))
+                RoundedRectangle(cornerRadius: PedefTheme.Radius.md)
+                    .fill(PedefTheme.Surface.hover)
                     .aspectRatio(0.75, contentMode: .fit)
                     .overlay {
                         if let thumbnailData = paper.thumbnailData,
@@ -739,34 +838,34 @@ struct PaperCard: View {
                                 .aspectRatio(contentMode: .fill)
                                 .clipped()
                         } else {
-                            VStack(spacing: 8) {
+                            VStack(spacing: PedefTheme.Spacing.sm) {
                                 Image(systemName: "doc.text.fill")
                                     .font(.system(size: 32))
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(PedefTheme.TextColor.tertiary)
                                 Text("PDF")
-                                    .font(.caption2.weight(.medium))
-                                    .foregroundStyle(.quaternary)
+                                    .font(PedefTheme.Typography.caption2)
+                                    .foregroundStyle(PedefTheme.TextColor.tertiary)
                             }
                         }
                     }
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .clipShape(RoundedRectangle(cornerRadius: PedefTheme.Radius.md))
 
                 // Quick actions overlay
                 if isHovering {
-                    HStack(spacing: 4) {
+                    HStack(spacing: PedefTheme.Spacing.xxs) {
                         Button {
                             toggleFavorite()
                         } label: {
                             Image(systemName: isFavorite ? "star.fill" : "star")
                                 .font(.caption)
-                                .foregroundStyle(isFavorite ? .yellow : .white)
+                                .foregroundStyle(isFavorite ? PedefTheme.Brand.purple : .white)
                                 .padding(6)
                                 .background(.black.opacity(0.5), in: Circle())
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(isFavorite ? "Remove from favorites" : "Add to favorites")
                     }
-                    .padding(8)
+                    .padding(PedefTheme.Spacing.sm)
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
 
@@ -774,64 +873,57 @@ struct PaperCard: View {
                 if paper.readingProgress > 0 && paper.readingProgress < 1 {
                     CircularProgressView(progress: paper.readingProgress)
                         .frame(width: 28, height: 28)
-                        .padding(8)
+                        .padding(PedefTheme.Spacing.sm)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                 }
             }
 
             // Info
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: PedefTheme.Spacing.xxs) {
                 Text(paper.title)
-                    .font(.subheadline.weight(.medium))
+                    .font(PedefTheme.Typography.subheadline)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
 
                 Text(paper.formattedAuthors)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .font(PedefTheme.Typography.caption)
+                    .foregroundStyle(PedefTheme.TextColor.secondary)
                     .lineLimit(1)
 
-                HStack(spacing: 6) {
+                HStack(spacing: PedefTheme.Spacing.xs) {
                     if paper.hasAnnotations {
                         Label("\(paper.annotations.count)", systemImage: "highlighter")
-                            .font(.caption2)
-                            .foregroundStyle(.orange)
+                            .font(PedefTheme.Typography.caption2)
+                            .foregroundStyle(PedefTheme.Semantic.warning)
                     }
 
                     if paper.isRead {
                         Image(systemName: "checkmark.circle.fill")
-                            .font(.caption2)
-                            .foregroundStyle(.green)
+                            .font(PedefTheme.Typography.caption2)
+                            .foregroundStyle(PedefTheme.Semantic.success)
                     }
 
                     Spacer()
 
                     if let date = paper.lastOpenedDate {
                         Text(date, style: .relative)
-                            .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .font(PedefTheme.Typography.caption2)
+                            .foregroundStyle(PedefTheme.TextColor.tertiary)
                     }
                 }
             }
-            .padding(.top, 10)
-            .padding(.horizontal, 4)
+            .padding(.top, PedefTheme.Spacing.md)
+            .padding(.horizontal, PedefTheme.Spacing.xxs)
         }
-        .padding(10)
-        .background {
-            RoundedRectangle(cornerRadius: 12)
-                .fill(isSelected ? Color.accentColor.opacity(0.1) : (isHovering ? Color.secondary.opacity(0.05) : Color.clear))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
-        }
+        .padding(PedefTheme.Spacing.md)
+        .pedefCard(isHovering: isHovering, isSelected: isSelected)
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: 0.15)) {
+            withAnimation(PedefTheme.Animation.quick) {
                 isHovering = hovering
             }
         }
         .scaleEffect(isHovering ? 1.02 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovering)
+        .animation(PedefTheme.Animation.spring, value: isHovering)
     }
 
     private func toggleFavorite() {
@@ -986,8 +1078,8 @@ struct PaperRow: View {
     var body: some View {
         HStack(spacing: 14) {
             // Thumbnail
-            RoundedRectangle(cornerRadius: 6)
-                .fill(Color.secondary.opacity(0.1))
+            RoundedRectangle(cornerRadius: PedefTheme.Radius.sm)
+                .fill(PedefTheme.Surface.hover)
                 .frame(width: 44, height: 60)
                 .overlay {
                     if let thumbnailData = paper.thumbnailData,
@@ -998,38 +1090,38 @@ struct PaperRow: View {
                             .clipped()
                     } else {
                         Image(systemName: "doc.text.fill")
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(PedefTheme.TextColor.tertiary)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .clipShape(RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: PedefTheme.Spacing.xxs) {
                 Text(paper.title)
-                    .font(.headline)
+                    .font(PedefTheme.Typography.headline)
                     .lineLimit(1)
 
                 Text(paper.formattedAuthors)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .font(PedefTheme.Typography.subheadline)
+                    .foregroundStyle(PedefTheme.TextColor.secondary)
                     .lineLimit(1)
 
-                HStack(spacing: 10) {
+                HStack(spacing: PedefTheme.Spacing.md) {
                     if let journal = paper.journal {
                         Text(journal)
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .font(PedefTheme.Typography.caption)
+                            .foregroundStyle(PedefTheme.TextColor.tertiary)
                     }
 
                     if paper.hasAnnotations {
                         Label("\(paper.annotations.count)", systemImage: "highlighter")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
+                            .font(PedefTheme.Typography.caption)
+                            .foregroundStyle(PedefTheme.Semantic.warning)
                     }
 
                     if paper.tags.contains("favorite") {
                         Image(systemName: "star.fill")
-                            .font(.caption)
-                            .foregroundStyle(.yellow)
+                            .font(PedefTheme.Typography.caption)
+                            .foregroundStyle(PedefTheme.Brand.purple)
                     }
                 }
             }
@@ -1037,25 +1129,25 @@ struct PaperRow: View {
             Spacer()
 
             // Right side indicators
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: PedefTheme.Spacing.xxs) {
                 if paper.readingProgress > 0 && paper.readingProgress < 1 {
                     CircularProgressView(progress: paper.readingProgress)
                         .frame(width: 28, height: 28)
                 } else if paper.isRead {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title3)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(PedefTheme.Semantic.success)
                 }
 
                 if let date = paper.lastOpenedDate {
                     Text(date, style: .relative)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                        .font(PedefTheme.Typography.caption2)
+                        .foregroundStyle(PedefTheme.TextColor.tertiary)
                 }
             }
         }
-        .padding(.vertical, 6)
-        .background(isHovering ? Color.secondary.opacity(0.05) : Color.clear)
+        .padding(.vertical, PedefTheme.Spacing.xs)
+        .background(isHovering ? PedefTheme.Surface.hover : Color.clear)
         .onHover { isHovering = $0 }
     }
 }
@@ -1067,11 +1159,11 @@ struct CircularProgressView: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.secondary.opacity(0.2), lineWidth: 3)
+                .stroke(PedefTheme.Brand.indigo.opacity(0.15), lineWidth: 3)
 
             Circle()
                 .trim(from: 0, to: animatedProgress)
-                .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                .stroke(PedefTheme.Brand.indigo, style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 .rotationEffect(.degrees(-90))
 
             Text("\(Int(animatedProgress * 100))")

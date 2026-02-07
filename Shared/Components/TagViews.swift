@@ -13,7 +13,7 @@ struct TagChipView: View {
     var body: some View {
         HStack(spacing: 4) {
             Circle()
-                .fill(Color(hex: tag.colorHex) ?? .accentColor)
+                .fill(Color(hex: tag.colorHex) ?? PedefTheme.Brand.indigo)
                 .frame(width: 8, height: 8)
 
             Text(tag.name)
@@ -33,12 +33,12 @@ struct TagChipView: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill((Color(hex: tag.colorHex) ?? .accentColor).opacity(0.15))
+            RoundedRectangle(cornerRadius: PedefTheme.Radius.pill)
+                .fill((Color(hex: tag.colorHex) ?? PedefTheme.Brand.indigo).opacity(0.15))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke((Color(hex: tag.colorHex) ?? .accentColor).opacity(0.3), lineWidth: 1)
+            RoundedRectangle(cornerRadius: PedefTheme.Radius.pill)
+                .stroke((Color(hex: tag.colorHex) ?? PedefTheme.Brand.indigo).opacity(0.3), lineWidth: 1)
         )
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -124,12 +124,12 @@ struct TagInputView: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 6)
             .background(
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(nsColor: .textBackgroundColor))
+                RoundedRectangle(cornerRadius: PedefTheme.Radius.md)
+                    .fill(PedefTheme.Surface.elevated)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(isFocused ? Color.accentColor : Color.gray.opacity(0.3), lineWidth: 1)
+                RoundedRectangle(cornerRadius: PedefTheme.Radius.md)
+                    .stroke(isFocused ? PedefTheme.Brand.indigo : Color.gray.opacity(0.3), lineWidth: 1)
             )
 
             if showingSuggestions {
@@ -142,7 +142,7 @@ struct TagInputView: View {
                         }) {
                             HStack {
                                 Circle()
-                                    .fill(Color(hex: tag.colorHex) ?? .accentColor)
+                                    .fill(Color(hex: tag.colorHex) ?? PedefTheme.Brand.indigo)
                                     .frame(width: 8, height: 8)
                                 Text(tag.name)
                                     .font(.caption)
@@ -163,11 +163,11 @@ struct TagInputView: View {
                         )
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, PedefTheme.Spacing.xxs)
                 .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(nsColor: .controlBackgroundColor))
-                        .shadow(color: .black.opacity(0.1), radius: 4, y: 2)
+                    RoundedRectangle(cornerRadius: PedefTheme.Radius.md)
+                        .fill(PedefTheme.Surface.elevated)
+                        .shadow(color: PedefTheme.Shadow.md.color, radius: PedefTheme.Shadow.md.radius, y: PedefTheme.Shadow.md.y)
                 )
             }
         }
@@ -195,12 +195,12 @@ struct TagSuggestionPillsView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: PedefTheme.Radius.pill)
                                 .stroke(Color(hex: suggestion.color)?.opacity(0.5) ?? .gray, lineWidth: 1)
                         )
                     }
                     .buttonStyle(.plain)
-                    .foregroundStyle(Color(hex: suggestion.color) ?? .accentColor)
+                    .foregroundStyle(Color(hex: suggestion.color) ?? PedefTheme.Brand.indigo)
                 }
             }
         }
@@ -289,8 +289,8 @@ struct PaperTagsSection: View {
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(nsColor: .controlBackgroundColor))
+            RoundedRectangle(cornerRadius: PedefTheme.Radius.lg)
+                .fill(PedefTheme.Surface.elevated)
         )
     }
 }

@@ -47,7 +47,7 @@ struct AgentPanelView: View {
             .focused($isInputFocused)
         }
         .frame(minWidth: 380)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(PedefTheme.Surface.primary)
         .onAppear {
             isInputFocused = true
             viewModel.setContext(
@@ -99,7 +99,7 @@ struct AgentPanelHeader: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [.purple, .pink],
+                            colors: [PedefTheme.Brand.purple, PedefTheme.Brand.indigo],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
@@ -113,11 +113,11 @@ struct AgentPanelHeader: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("AI Assistant")
-                    .font(.headline)
+                    .font(PedefTheme.Typography.headline)
 
                 Text("Powered by Claude")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(PedefTheme.Typography.caption2)
+                    .foregroundStyle(PedefTheme.TextColor.tertiary)
             }
 
             Spacer()
@@ -143,9 +143,9 @@ struct AgentPanelHeader: View {
                     Image(systemName: "chevron.down")
                         .font(.caption2)
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, PedefTheme.Spacing.md)
                 .padding(.vertical, 5)
-                .background(.quaternary, in: Capsule())
+                .background(PedefTheme.Surface.hover, in: Capsule())
             }
             .buttonStyle(.plain)
 
@@ -158,9 +158,9 @@ struct AgentPanelHeader: View {
             .foregroundStyle(.secondary)
             .help("Clear conversation")
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(.bar)
+        .padding(.horizontal, PedefTheme.Spacing.lg)
+        .padding(.vertical, PedefTheme.Spacing.md)
+        .pedefBar()
     }
 }
 
@@ -180,7 +180,7 @@ struct ContextBanner: View {
             } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "doc.text.fill")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(PedefTheme.Brand.purple)
 
                     Text(paper.title)
                         .lineLimit(1)
@@ -208,7 +208,7 @@ struct ContextBanner: View {
                     if let selection = selectedText, !selection.isEmpty {
                         HStack(alignment: .top, spacing: 6) {
                             Rectangle()
-                                .fill(.blue)
+                                .fill(PedefTheme.Brand.purple)
                                 .frame(width: 2)
 
                             Text(selection)
@@ -222,9 +222,9 @@ struct ContextBanner: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Color.blue.opacity(0.06))
+        .padding(.horizontal, PedefTheme.Spacing.lg)
+        .padding(.vertical, PedefTheme.Spacing.md)
+        .background(PedefTheme.Brand.purple.opacity(0.06))
     }
 }
 
@@ -243,21 +243,15 @@ struct WelcomeView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "sparkles")
                         .font(.system(size: 40))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [.purple, .pink, .orange],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .foregroundStyle(PedefTheme.Brand.gradient)
                         .symbolEffect(.variableColor.iterative)
 
                     Text("How can I help you?")
-                        .font(.title2.weight(.semibold))
+                        .font(PedefTheme.Typography.title2)
 
                     Text("Ask questions about your papers, get summaries, or explore connections.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(PedefTheme.Typography.subheadline)
+                        .foregroundStyle(PedefTheme.TextColor.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
                 }
@@ -316,9 +310,9 @@ struct QuickActionButton: View {
                     .foregroundStyle(.tertiary)
                     .opacity(isHovering ? 1 : 0)
             }
-            .padding(12)
-            .background(isHovering ? Color.secondary.opacity(0.1) : Color.secondary.opacity(0.05))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .padding(PedefTheme.Spacing.md)
+            .background(isHovering ? PedefTheme.Surface.hover : PedefTheme.Surface.elevated)
+            .clipShape(RoundedRectangle(cornerRadius: PedefTheme.Radius.lg))
         }
         .buttonStyle(.plain)
         .onHover { isHovering = $0 }
@@ -364,10 +358,10 @@ enum QuickAction: String, CaseIterable, Identifiable {
 
     var color: Color {
         switch self {
-        case .summarize: return .blue
-        case .explain: return .yellow
-        case .findRelated: return .purple
-        case .extractCitations: return .green
+        case .summarize: return PedefTheme.Brand.indigo
+        case .explain: return PedefTheme.Semantic.warning
+        case .findRelated: return PedefTheme.Brand.purple
+        case .extractCitations: return PedefTheme.Semantic.success
         }
     }
 }
@@ -428,9 +422,9 @@ struct MessageBubble: View {
                         .textSelection(.enabled)
                 }
             }
-            .padding(12)
-            .background(message.role == .user ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(PedefTheme.Spacing.md)
+            .background(message.role == .user ? PedefTheme.Brand.indigo.opacity(0.10) : PedefTheme.Surface.elevated)
+            .clipShape(RoundedRectangle(cornerRadius: PedefTheme.Radius.xl))
 
             if message.role == .user {
                 MessageAvatar(isAssistant: false)
@@ -448,14 +442,14 @@ struct MessageAvatar: View {
         ZStack {
             Circle()
                 .fill(isAssistant ?
-                    LinearGradient(colors: [.purple, .pink], startPoint: .topLeading, endPoint: .bottomTrailing) :
-                    LinearGradient(colors: [.gray.opacity(0.3), .gray.opacity(0.2)], startPoint: .top, endPoint: .bottom)
+                    LinearGradient(colors: [PedefTheme.Brand.purple, PedefTheme.Brand.indigo], startPoint: .topLeading, endPoint: .bottomTrailing) :
+                    LinearGradient(colors: [Color.gray.opacity(0.3), Color.gray.opacity(0.2)], startPoint: .top, endPoint: .bottom)
                 )
                 .frame(width: 28, height: 28)
 
             Image(systemName: isAssistant ? "sparkles" : "person.fill")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(isAssistant ? .white : .secondary)
+                .foregroundStyle(isAssistant ? .white : PedefTheme.TextColor.secondary)
         }
     }
 }
@@ -493,9 +487,9 @@ struct StreamingBubble: View {
                         .textSelection(.enabled)
                 }
             }
-            .padding(12)
-            .background(Color.secondary.opacity(0.08))
-            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(PedefTheme.Spacing.md)
+            .background(PedefTheme.Surface.elevated)
+            .clipShape(RoundedRectangle(cornerRadius: PedefTheme.Radius.xl))
 
             Spacer(minLength: 40)
         }
@@ -530,27 +524,27 @@ struct AgentInputArea: View {
                         }
                     }
             }
-            .padding(10)
-            .background(Color.secondary.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+            .padding(PedefTheme.Spacing.md)
+            .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.lg))
             .disabled(isDisabled)
 
             Button(action: onSubmit) {
                 ZStack {
                     Circle()
-                        .fill(canSend ? Color.accentColor : Color.secondary.opacity(0.3))
+                        .fill(canSend ? PedefTheme.Brand.indigo : Color.secondary.opacity(0.3))
                         .frame(width: 32, height: 32)
 
                     Image(systemName: "arrow.up")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(canSend ? .white : .secondary)
+                        .foregroundStyle(canSend ? .white : PedefTheme.TextColor.secondary)
                 }
             }
             .buttonStyle(.plain)
             .disabled(!canSend)
-            .animation(.easeInOut(duration: 0.15), value: canSend)
+            .animation(PedefTheme.Animation.quick, value: canSend)
         }
-        .padding(12)
-        .background(.bar)
+        .padding(PedefTheme.Spacing.md)
+        .pedefBar()
     }
 
     private var canSend: Bool {
@@ -831,12 +825,12 @@ struct AgentSettingsView: View {
                 HStack {
                     if keychainService.hasAPIKey {
                         Label("API key configured", systemImage: "checkmark.circle.fill")
-                            .font(.caption)
-                            .foregroundStyle(.green)
+                            .font(PedefTheme.Typography.caption)
+                            .foregroundStyle(PedefTheme.Semantic.success)
                     } else {
                         Label("No API key configured", systemImage: "exclamationmark.circle")
-                            .font(.caption)
-                            .foregroundStyle(.orange)
+                            .font(PedefTheme.Typography.caption)
+                            .foregroundStyle(PedefTheme.Semantic.warning)
                     }
 
                     Spacer()
@@ -861,8 +855,8 @@ struct AgentSettingsView: View {
 
                 if let message = saveMessage {
                     Text(message)
-                        .font(.caption)
-                        .foregroundStyle(message.contains("Error") ? .red : .green)
+                        .font(PedefTheme.Typography.caption)
+                        .foregroundStyle(message.contains("Error") ? PedefTheme.Semantic.error : PedefTheme.Semantic.success)
                 }
 
                 Text("Get your API key from console.anthropic.com")
@@ -1003,10 +997,10 @@ struct ShortcutRow: View {
             Spacer()
             Text(shortcut)
                 .font(.system(.body, design: .monospaced))
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 4))
+                .foregroundStyle(PedefTheme.TextColor.secondary)
+                .padding(.horizontal, PedefTheme.Spacing.sm)
+                .padding(.vertical, PedefTheme.Spacing.xxs)
+                .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.xs))
         }
     }
 }

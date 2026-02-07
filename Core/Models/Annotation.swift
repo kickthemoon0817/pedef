@@ -42,13 +42,13 @@ enum AnnotationType: String, Codable, CaseIterable {
 
 /// Predefined annotation colors
 enum AnnotationColor: String, Codable, CaseIterable {
-    case yellow = "#FFEB3B"
-    case green = "#4CAF50"
-    case blue = "#2196F3"
-    case pink = "#E91E63"
-    case purple = "#9C27B0"
-    case orange = "#FF9800"
-    case red = "#F44336"
+    case yellow = "#F5C842"
+    case green = "#34D399"
+    case blue = "#60A5FA"
+    case pink = "#F472B6"
+    case purple = "#A78BFA"
+    case orange = "#FB923C"
+    case red = "#F87171"
 
     var displayName: String {
         switch self {
