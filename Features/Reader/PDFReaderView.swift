@@ -14,89 +14,72 @@ struct PDFReaderView: View {
     @State private var pageJumpText: String = ""
 
     var body: some View {
-        HSplitView {
-            // Thumbnail sidebar (optional)
-            if showThumbnails {
-                ThumbnailSidebarView(
-                    document: pdfDocument,
-                    currentPage: appState.currentPage,
-                    onPageSelect: { page in
-                        handlePageChange(page: page)
-                    }
-                )
-                .frame(width: 120)
-                .transition(.move(edge: .leading))
-            }
+        VStack(spacing: 0) {
+            // Custom reader header bar
+            ReaderHeaderBar(
+                paper: paper,
+                showThumbnails: $showThumbnails,
+                showOutline: $showOutline,
+                showAnnotationSidebar: $showAnnotationSidebar,
+                pdfDocument: pdfDocument,
+                onOutlineSelect: navigateToOutlineItem,
+                onClose: { appState.closePaper() },
+                onToggleAgent: { appState.isAgentPanelVisible.toggle() },
+                isAgentVisible: appState.isAgentPanelVisible
+            )
 
-            // Main PDF View
-            VStack(spacing: 0) {
-                // PDF Viewer
-                PDFKitView(
-                    document: $pdfDocument,
-                    currentPage: $appState.currentPage,
-                    scale: $currentScale,
-                    selectedText: $appState.selectedText,
-                    onPageChange: handlePageChange
-                )
+            // Main content area
+            HStack(spacing: 0) {
+                // Thumbnail sidebar (optional)
+                if showThumbnails {
+                    ThumbnailSidebarView(
+                        document: pdfDocument,
+                        currentPage: appState.currentPage,
+                        onPageSelect: { page in
+                            handlePageChange(page: page)
+                        }
+                    )
+                    .frame(width: 120)
+                    .transition(.move(edge: .leading))
 
-                // Bottom toolbar
-                ReaderBottomToolbar(
-                    paper: paper,
-                    currentPage: appState.currentPage,
-                    totalPages: pdfDocument?.pageCount ?? 0,
-                    scale: $currentScale,
-                    onPageTap: { showPageJumpSheet = true },
-                    onPreviousPage: navigateToPreviousPage,
-                    onNextPage: navigateToNextPage
-                )
-            }
-
-            // Annotation Sidebar
-            if showAnnotationSidebar {
-                AnnotationSidebarView(paper: paper, currentPage: appState.currentPage)
-                    .frame(minWidth: 260, maxWidth: 360)
-            }
-        }
-        .navigationTitle(paper.title)
-        .toolbar {
-            ToolbarItemGroup(placement: .navigation) {
-                // Thumbnails toggle
-                Button {
-                    withAnimation(.spring(response: 0.3)) {
-                        showThumbnails.toggle()
-                    }
-                } label: {
-                    Image(systemName: "sidebar.left")
-                        .symbolVariant(showThumbnails ? .fill : .none)
+                    // Custom thin divider
+                    Rectangle()
+                        .fill(PedefTheme.TextColor.tertiary.opacity(0.15))
+                        .frame(width: 1)
                 }
-                .help("Toggle Thumbnails")
 
-                // Outline popover
-                Button {
-                    showOutline.toggle()
-                } label: {
-                    Image(systemName: "list.bullet.indent")
-                }
-                .help("Table of Contents")
-                .popover(isPresented: $showOutline) {
-                    OutlinePopover(
-                        outline: pdfDocument?.outlineRoot,
-                        onSelect: navigateToOutlineItem
+                // Main PDF View
+                VStack(spacing: 0) {
+                    PDFKitView(
+                        document: $pdfDocument,
+                        currentPage: $appState.currentPage,
+                        scale: $currentScale,
+                        selectedText: $appState.selectedText,
+                        onPageChange: handlePageChange
+                    )
+
+                    // Bottom toolbar
+                    ReaderBottomToolbar(
+                        paper: paper,
+                        currentPage: appState.currentPage,
+                        totalPages: pdfDocument?.pageCount ?? 0,
+                        scale: $currentScale,
+                        onPageTap: { showPageJumpSheet = true },
+                        onPreviousPage: navigateToPreviousPage,
+                        onNextPage: navigateToNextPage
                     )
                 }
-            }
 
-            ToolbarItemGroup(placement: .primaryAction) {
-                // Annotation sidebar toggle
-                Button {
-                    withAnimation(.spring(response: 0.3)) {
-                        showAnnotationSidebar.toggle()
-                    }
-                } label: {
-                    Image(systemName: "sidebar.trailing")
-                        .symbolVariant(showAnnotationSidebar ? .fill : .none)
+                // Annotation Sidebar
+                if showAnnotationSidebar {
+                    // Custom thin divider
+                    Rectangle()
+                        .fill(PedefTheme.TextColor.tertiary.opacity(0.15))
+                        .frame(width: 1)
+
+                    AnnotationSidebarView(paper: paper, currentPage: appState.currentPage)
+                        .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
                 }
-                .help("Toggle Annotations")
             }
         }
         .sheet(isPresented: $showPageJumpSheet) {
@@ -236,6 +219,153 @@ struct PDFReaderView: View {
     }
 }
 
+// MARK: - Reader Header Bar
+
+struct ReaderHeaderBar: View {
+    let paper: Paper
+    @Binding var showThumbnails: Bool
+    @Binding var showOutline: Bool
+    @Binding var showAnnotationSidebar: Bool
+    let pdfDocument: PDFDocument?
+    let onOutlineSelect: (PDFDestination) -> Void
+    let onClose: () -> Void
+    let onToggleAgent: () -> Void
+    let isAgentVisible: Bool
+
+    var body: some View {
+        HStack(spacing: PedefTheme.Spacing.sm) {
+            // Left: panel toggles
+            HStack(spacing: PedefTheme.Spacing.xxs) {
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        showThumbnails.toggle()
+                    }
+                } label: {
+                    Image(systemName: "sidebar.left")
+                        .symbolVariant(showThumbnails ? .fill : .none)
+                }
+                .buttonStyle(PedefToolbarButtonStyle(isActive: showThumbnails))
+                .help("Toggle Thumbnails")
+
+                Button {
+                    showOutline.toggle()
+                } label: {
+                    Image(systemName: "list.bullet.indent")
+                }
+                .buttonStyle(PedefToolbarButtonStyle(isActive: showOutline))
+                .help("Table of Contents")
+                .popover(isPresented: $showOutline) {
+                    OutlinePopover(
+                        outline: pdfDocument?.outlineRoot,
+                        onSelect: onOutlineSelect
+                    )
+                }
+            }
+
+            // Center: paper title
+            Spacer()
+
+            Text(paper.title)
+                .font(PedefTheme.Typography.subheadline)
+                .foregroundStyle(PedefTheme.TextColor.primary)
+                .lineLimit(1)
+                .frame(maxWidth: 400)
+
+            Spacer()
+
+            // Right: annotation tools + toggles
+            HStack(spacing: PedefTheme.Spacing.xxs) {
+                // Highlight
+                Menu {
+                    ForEach(AnnotationColor.allCases, id: \.self) { color in
+                        Button {
+                            NotificationCenter.default.post(name: .highlightSelection, object: color)
+                        } label: {
+                            Label(color.displayName, systemImage: "circle.fill")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "highlighter")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(PedefTheme.TextColor.secondary)
+                        .frame(width: 28, height: 26)
+                } primaryAction: {
+                    NotificationCenter.default.post(name: .highlightSelection, object: nil)
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("Highlight (⌘H)")
+
+                Button {
+                    NotificationCenter.default.post(name: .addNote, object: nil)
+                } label: {
+                    Image(systemName: "note.text.badge.plus")
+                }
+                .buttonStyle(PedefToolbarButtonStyle())
+                .help("Note (⇧⌘N)")
+
+                Button {
+                    NotificationCenter.default.post(name: .addBookmark, object: nil)
+                } label: {
+                    Image(systemName: "bookmark")
+                }
+                .buttonStyle(PedefToolbarButtonStyle())
+                .help("Bookmark (⇧⌘B)")
+
+                Rectangle()
+                    .fill(PedefTheme.TextColor.tertiary.opacity(0.2))
+                    .frame(width: 1, height: 18)
+                    .padding(.horizontal, PedefTheme.Spacing.xxxs)
+
+                Button(action: onToggleAgent) {
+                    HStack(spacing: PedefTheme.Spacing.xxs) {
+                        Image(systemName: "sparkles")
+                            .foregroundStyle(PedefTheme.Brand.purple)
+                        Text("AI")
+                            .font(PedefTheme.Typography.caption)
+                    }
+                }
+                .buttonStyle(PedefToolbarButtonStyle(isActive: isAgentVisible))
+                .help("AI Assistant (⌘K)")
+
+                Rectangle()
+                    .fill(PedefTheme.TextColor.tertiary.opacity(0.2))
+                    .frame(width: 1, height: 18)
+                    .padding(.horizontal, PedefTheme.Spacing.xxxs)
+
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        showAnnotationSidebar.toggle()
+                    }
+                } label: {
+                    Image(systemName: "sidebar.trailing")
+                        .symbolVariant(showAnnotationSidebar ? .fill : .none)
+                }
+                .buttonStyle(PedefToolbarButtonStyle(isActive: showAnnotationSidebar))
+                .help("Annotations")
+
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(PedefTheme.TextColor.tertiary)
+                        .frame(width: 22, height: 22)
+                        .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.xs))
+                }
+                .buttonStyle(.plain)
+                .help("Close")
+            }
+        }
+        .padding(.horizontal, PedefTheme.Spacing.lg)
+        .padding(.vertical, PedefTheme.Spacing.sm)
+        .background(PedefTheme.Surface.bar)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(PedefTheme.TextColor.tertiary.opacity(0.15))
+                .frame(height: 1)
+        }
+    }
+}
+
 // MARK: - Thumbnail Sidebar
 
 struct ThumbnailSidebarView: View {
@@ -261,7 +391,7 @@ struct ThumbnailSidebarView: View {
                 }
                 .padding(8)
             }
-            .background(Color(nsColor: .controlBackgroundColor))
+            .background(PedefTheme.Surface.sidebar)
             .onChange(of: currentPage) { _, newPage in
                 withAnimation {
                     proxy.scrollTo(newPage, anchor: .center)
@@ -295,10 +425,10 @@ struct ThumbnailItem: View {
                 .frame(height: 120)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 4)
-                        .strokeBorder(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                    RoundedRectangle(cornerRadius: PedefTheme.Radius.xs)
+                        .strokeBorder(isSelected ? PedefTheme.Brand.indigo : Color.clear, lineWidth: 2)
                 }
-                .shadow(color: .black.opacity(0.1), radius: 2, y: 1)
+                .pedefShadow(PedefTheme.Shadow.sm)
 
                 Text("\(pageIndex + 1)")
                     .font(.caption2)
@@ -332,7 +462,7 @@ struct PDFKitView: NSViewRepresentable {
         pdfView.autoScales = true
         pdfView.displayMode = .singlePageContinuous
         pdfView.displayDirection = .vertical
-        pdfView.backgroundColor = NSColor(Color(nsColor: .windowBackgroundColor))
+        pdfView.backgroundColor = NSColor(PedefTheme.Surface.primary)
         pdfView.delegate = context.coordinator
 
         NotificationCenter.default.addObserver(
@@ -438,7 +568,7 @@ struct ReaderBottomToolbar: View {
                         .monospacedDigit()
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+                        .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
                 }
                 .buttonStyle(.plain)
                 .help("Jump to page...")
@@ -503,9 +633,9 @@ struct ReaderBottomToolbar: View {
                 .frame(width: 16)
                 .help("Zoom Presets")
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+            .padding(.horizontal, PedefTheme.Spacing.md)
+            .padding(.vertical, PedefTheme.Spacing.xs)
+            .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.md))
 
             Spacer()
 
@@ -515,7 +645,7 @@ struct ReaderBottomToolbar: View {
                     ProgressView(value: paper.readingProgress)
                         .progressViewStyle(.linear)
                         .frame(width: 60)
-                        .tint(.accentColor)
+                        .tint(PedefTheme.Brand.indigo)
 
                     Text("\(Int(paper.readingProgress * 100))%")
                         .font(.caption)
@@ -524,9 +654,14 @@ struct ReaderBottomToolbar: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(.bar)
+        .padding(.horizontal, PedefTheme.Spacing.lg)
+        .padding(.vertical, PedefTheme.Spacing.sm)
+        .background(PedefTheme.Surface.bar)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(PedefTheme.TextColor.tertiary.opacity(0.15))
+                .frame(height: 1)
+        }
     }
 }
 
@@ -542,35 +677,52 @@ struct PageJumpSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: PedefTheme.Spacing.lg) {
             Text("Go to Page")
-                .font(.headline)
+                .font(PedefTheme.Typography.headline)
 
             HStack {
                 TextField("Page number", text: $inputText)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .font(PedefTheme.Typography.body)
+                    .padding(PedefTheme.Spacing.sm)
+                    .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: PedefTheme.Radius.sm)
+                            .stroke(PedefTheme.Brand.indigo.opacity(0.5), lineWidth: 1)
+                    )
                     .frame(width: 100)
                     .focused($isFocused)
                     .onSubmit(jumpToPage)
 
                 Text("of \(totalPages)")
-                    .foregroundStyle(.secondary)
+                    .font(PedefTheme.Typography.callout)
+                    .foregroundStyle(PedefTheme.TextColor.secondary)
             }
 
-            HStack(spacing: 12) {
+            HStack(spacing: PedefTheme.Spacing.md) {
                 Button("Cancel") {
                     dismiss()
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(PedefTheme.TextColor.secondary)
                 .keyboardShortcut(.cancelAction)
 
-                Button("Go") {
+                Button {
                     jumpToPage()
+                } label: {
+                    Text("Go")
+                        .font(PedefTheme.Typography.subheadline)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, PedefTheme.Spacing.lg)
+                        .padding(.vertical, PedefTheme.Spacing.xs)
+                        .background(PedefTheme.Brand.indigo, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
                 }
+                .buttonStyle(.plain)
                 .keyboardShortcut(.defaultAction)
-                .buttonStyle(.borderedProminent)
             }
         }
-        .padding(24)
+        .padding(PedefTheme.Spacing.xxl)
         .frame(width: 240)
         .onAppear {
             inputText = "\(currentPage + 1)"
@@ -594,7 +746,8 @@ struct OutlinePopover: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Contents")
-                .font(.headline)
+                .font(PedefTheme.Typography.headline)
+                .foregroundStyle(PedefTheme.TextColor.primary)
                 .padding()
 
             Divider()
@@ -604,22 +757,23 @@ struct OutlinePopover: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         OutlineItemView(item: outline, depth: 0, onSelect: onSelect)
                     }
-                    .padding(.vertical, 8)
+                    .padding(.vertical, PedefTheme.Spacing.sm)
                 }
             } else {
-                VStack(spacing: 8) {
+                VStack(spacing: PedefTheme.Spacing.sm) {
                     Image(systemName: "list.bullet.rectangle")
                         .font(.title)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(PedefTheme.TextColor.tertiary)
                     Text("No table of contents")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .font(PedefTheme.Typography.subheadline)
+                        .foregroundStyle(PedefTheme.TextColor.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding()
             }
         }
         .frame(width: 300, height: 400)
+        .background(PedefTheme.Surface.elevated)
     }
 }
 
@@ -706,16 +860,17 @@ struct AnnotationSidebarView: View {
             // Header
             HStack {
                 Text("Annotations")
-                    .font(.headline)
+                    .font(PedefTheme.Typography.headline)
+                    .foregroundStyle(PedefTheme.TextColor.primary)
 
                 Spacer()
 
                 Text("\(paper.annotations.count)")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(.quaternary, in: Capsule())
+                    .font(PedefTheme.Typography.caption)
+                    .foregroundStyle(PedefTheme.TextColor.tertiary)
+                    .padding(.horizontal, PedefTheme.Spacing.sm)
+                    .padding(.vertical, PedefTheme.Spacing.xxxs)
+                    .background(PedefTheme.Surface.hover, in: Capsule())
 
                 Menu {
                     Button("All") { filterType = nil }
@@ -729,75 +884,91 @@ struct AnnotationSidebarView: View {
                     }
                 } label: {
                     Image(systemName: filterType == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(filterType != nil ? PedefTheme.Brand.indigo : PedefTheme.TextColor.tertiary)
                 }
                 .menuStyle(.borderlessButton)
+                .fixedSize()
             }
-            .padding()
+            .padding(.horizontal, PedefTheme.Spacing.lg)
+            .padding(.vertical, PedefTheme.Spacing.md)
 
             // Search
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.tertiary)
-                TextField("Search annotations...", text: $searchText)
-                    .textFieldStyle(.plain)
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.tertiary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(8)
-            .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-            .padding(.horizontal)
-            .padding(.bottom, 8)
+            PedefSearchField(text: $searchText, placeholder: "Search annotations...")
+                .padding(.horizontal, PedefTheme.Spacing.lg)
+                .padding(.bottom, PedefTheme.Spacing.sm)
 
-            Divider()
+            Rectangle()
+                .fill(PedefTheme.TextColor.tertiary.opacity(0.12))
+                .frame(height: 1)
 
             // Annotation List
             if filteredAnnotations.isEmpty {
-                VStack(spacing: 12) {
+                VStack(spacing: PedefTheme.Spacing.md) {
                     Image(systemName: "highlighter")
-                        .font(.largeTitle)
-                        .foregroundStyle(.tertiary)
+                        .font(.system(size: 32))
+                        .foregroundStyle(PedefTheme.TextColor.tertiary)
 
                     Text("No Annotations")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
+                        .font(PedefTheme.Typography.headline)
+                        .foregroundStyle(PedefTheme.TextColor.secondary)
 
                     Text("Select text and use ⌘H to highlight")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .font(PedefTheme.Typography.caption)
+                        .foregroundStyle(PedefTheme.TextColor.tertiary)
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding()
             } else {
-                List {
-                    if !annotationsOnCurrentPage.isEmpty {
-                        Section("This Page") {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        if !annotationsOnCurrentPage.isEmpty {
+                            AnnotationSectionHeader(title: "This Page", count: annotationsOnCurrentPage.count)
                             ForEach(annotationsOnCurrentPage) { annotation in
                                 AnnotationRow(annotation: annotation)
                             }
                         }
-                    }
 
-                    let otherAnnotations = filteredAnnotations.filter { $0.pageIndex != currentPage }
-                    if !otherAnnotations.isEmpty {
-                        Section("Other Pages (\(otherAnnotations.count))") {
+                        let otherAnnotations = filteredAnnotations.filter { $0.pageIndex != currentPage }
+                        if !otherAnnotations.isEmpty {
+                            AnnotationSectionHeader(title: "Other Pages", count: otherAnnotations.count)
                             ForEach(otherAnnotations) { annotation in
                                 AnnotationRow(annotation: annotation)
                             }
                         }
                     }
+                    .padding(.vertical, PedefTheme.Spacing.xs)
                 }
-                .listStyle(.plain)
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor))
+        .background(PedefTheme.Surface.sidebar)
+    }
+}
+
+struct AnnotationSectionHeader: View {
+    let title: String
+    let count: Int
+
+    var body: some View {
+        HStack {
+            Text(title.uppercased())
+                .font(PedefTheme.Typography.caption2)
+                .tracking(0.8)
+                .foregroundStyle(PedefTheme.TextColor.tertiary)
+
+            Text("\(count)")
+                .font(PedefTheme.Typography.caption2)
+                .foregroundStyle(PedefTheme.TextColor.tertiary)
+                .padding(.horizontal, PedefTheme.Spacing.xs)
+                .padding(.vertical, 1)
+                .background(PedefTheme.Surface.hover, in: Capsule())
+
+            Spacer()
+        }
+        .padding(.horizontal, PedefTheme.Spacing.lg)
+        .padding(.top, PedefTheme.Spacing.md)
+        .padding(.bottom, PedefTheme.Spacing.xs)
     }
 }
 
@@ -850,21 +1021,22 @@ struct AnnotationRow: View {
             }
 
             if !annotation.tags.isEmpty {
-                HStack(spacing: 4) {
+                HStack(spacing: PedefTheme.Spacing.xxs) {
                     ForEach(annotation.tags, id: \.self) { tag in
                         Text(tag)
-                            .font(.caption2)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.blue.opacity(0.1), in: Capsule())
-                            .foregroundStyle(.blue)
+                            .font(PedefTheme.Typography.caption2)
+                            .padding(.horizontal, PedefTheme.Spacing.xs)
+                            .padding(.vertical, PedefTheme.Spacing.xxxs)
+                            .background(PedefTheme.Brand.indigo.opacity(0.10), in: Capsule())
+                            .foregroundStyle(PedefTheme.Brand.indigo)
                     }
                 }
                 .padding(.leading, 18)
             }
         }
-        .padding(.vertical, 6)
-        .background(isHovering ? Color.secondary.opacity(0.05) : Color.clear)
+        .padding(.horizontal, PedefTheme.Spacing.lg)
+        .padding(.vertical, PedefTheme.Spacing.sm)
+        .background(isHovering ? PedefTheme.Surface.hover : Color.clear)
         .onHover { isHovering = $0 }
         .contextMenu {
             Button("Edit Note") {
@@ -907,65 +1079,93 @@ struct AnnotationRow: View {
             }
         }
         .popover(isPresented: $showEditNote) {
-            VStack(spacing: 12) {
+            VStack(spacing: PedefTheme.Spacing.md) {
                 Text("Edit Note")
-                    .font(.headline)
+                    .font(PedefTheme.Typography.headline)
 
                 TextEditor(text: $editingNote)
                     .frame(width: 250, height: 100)
-                    .font(.body)
+                    .font(PedefTheme.Typography.body)
+                    .padding(PedefTheme.Spacing.xs)
+                    .background(PedefTheme.Surface.hover)
+                    .clipShape(RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
 
                 HStack {
                     Button("Cancel") {
                         showEditNote = false
                     }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(PedefTheme.TextColor.secondary)
                     .keyboardShortcut(.cancelAction)
 
                     Spacer()
 
-                    Button("Save") {
+                    Button {
                         annotation.noteContent = editingNote.isEmpty ? nil : editingNote
                         annotation.modifiedDate = Date()
                         showEditNote = false
+                    } label: {
+                        Text("Save")
+                            .font(PedefTheme.Typography.subheadline)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, PedefTheme.Spacing.lg)
+                            .padding(.vertical, PedefTheme.Spacing.xs)
+                            .background(PedefTheme.Brand.indigo, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
                     }
+                    .buttonStyle(.plain)
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
                 }
             }
-            .padding()
+            .padding(PedefTheme.Spacing.lg)
             .frame(width: 300)
         }
         .popover(isPresented: $showAddTag) {
-            VStack(spacing: 12) {
+            VStack(spacing: PedefTheme.Spacing.md) {
                 Text("Add Tag")
-                    .font(.headline)
+                    .font(PedefTheme.Typography.headline)
 
                 TextField("Tag name", text: $newTag)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .font(PedefTheme.Typography.body)
+                    .padding(PedefTheme.Spacing.sm)
+                    .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: PedefTheme.Radius.sm)
+                            .stroke(PedefTheme.Brand.indigo.opacity(0.5), lineWidth: 1)
+                    )
 
                 HStack {
                     Button("Cancel") {
                         newTag = ""
                         showAddTag = false
                     }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(PedefTheme.TextColor.secondary)
                     .keyboardShortcut(.cancelAction)
 
                     Spacer()
 
-                    Button("Add") {
+                    Button {
                         if !newTag.isEmpty && !annotation.tags.contains(newTag) {
                             annotation.tags.append(newTag.lowercased())
                             annotation.modifiedDate = Date()
                         }
                         newTag = ""
                         showAddTag = false
+                    } label: {
+                        Text("Add")
+                            .font(PedefTheme.Typography.subheadline)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, PedefTheme.Spacing.lg)
+                            .padding(.vertical, PedefTheme.Spacing.xs)
+                            .background(newTag.isEmpty ? PedefTheme.TextColor.tertiary : PedefTheme.Brand.indigo, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
                     }
+                    .buttonStyle(.plain)
                     .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
                     .disabled(newTag.isEmpty)
                 }
             }
-            .padding()
+            .padding(PedefTheme.Spacing.lg)
             .frame(width: 250)
         }
     }
