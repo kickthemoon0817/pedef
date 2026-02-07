@@ -53,12 +53,14 @@ struct PedefApp: App {
                 .environmentObject(historyService)
                 .environmentObject(tagService)
                 .environmentObject(errorReporter)
+                .tint(PedefTheme.Brand.indigo)
                 .onAppear {
                     tagService.configure(with: sharedModelContainer.mainContext)
                     historyService.setModelContext(sharedModelContainer.mainContext)
                 }
         }
         .modelContainer(sharedModelContainer)
+        .windowStyle(.hiddenTitleBar)
         .commands {
             PedefCommands()
         }
