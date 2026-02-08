@@ -1,5 +1,7 @@
 import Foundation
 import CoreGraphics
+import PDFKit
+import os.log
 
 enum ReaderMCPEndpointAudience: String {
     case reader
@@ -18,6 +20,7 @@ struct ReaderMCPSession: Identifiable {
     let id: UUID
     let paperID: UUID
     let paperTitle: String
+    let pageCount: Int
     var currentPage: Int
     let openedAt: Date
     var updatedAt: Date
@@ -68,22 +71,28 @@ struct ReaderMCPStateSnapshot {
     let lastUpdatedAt: Date
 }
 
+private let mcpLog = Logger(subsystem: "com.pedef.app", category: "ReaderMCP")
+
 @MainActor
 final class ReaderMCPService {
     static let shared = ReaderMCPService()
 
     private var sessions: [UUID: ReaderMCPSession] = [:]
     private var sessionPapers: [UUID: Paper] = [:]
+    private var sessionDocuments: [UUID: PDFDocument] = [:]
 
     private init() {}
 
     func openSession(for paper: Paper, currentPage: Int? = nil) -> ReaderMCPSession {
         let now = Date()
-        let current = max(currentPage ?? paper.currentPage, 0)
+        let document = PDFService.shared.pdfDocument(from: paper.pdfData)
+        let pageCount = document?.pageCount ?? paper.pageCount
+        let current = max(min(currentPage ?? paper.currentPage, pageCount - 1), 0)
         let session = ReaderMCPSession(
             id: UUID(),
             paperID: paper.id,
             paperTitle: paper.title,
+            pageCount: pageCount,
             currentPage: current,
             openedAt: now,
             updatedAt: now
@@ -91,6 +100,7 @@ final class ReaderMCPService {
 
         sessions[session.id] = session
         sessionPapers[session.id] = paper
+        if let document { sessionDocuments[session.id] = document }
         _ = writeBridgeSnapshot()
         return session
     }
@@ -98,6 +108,7 @@ final class ReaderMCPService {
     func closeSession(_ sessionID: UUID) {
         sessions.removeValue(forKey: sessionID)
         sessionPapers.removeValue(forKey: sessionID)
+        sessionDocuments.removeValue(forKey: sessionID)
         _ = writeBridgeSnapshot()
     }
 
@@ -187,10 +198,10 @@ final class ReaderMCPService {
     }
 
     func listPages(sessionID: UUID) -> [ReaderMCPPageInfo] {
-        guard let (_, paper) = sessionAndPaper(for: sessionID) else { return [] }
-        guard let document = PDFService.shared.pdfDocument(from: paper.pdfData) else { return [] }
+        guard let (session, _) = sessionAndPaper(for: sessionID) else { return [] }
+        guard let document = sessionDocuments[sessionID] else { return [] }
 
-        let pageCount = document.pageCount
+        let pageCount = session.pageCount
         guard pageCount > 0 else { return [] }
 
         return (0..<pageCount).map { pageIndex in
@@ -202,10 +213,13 @@ final class ReaderMCPService {
 
     func getText(sessionID: UUID, pageIndex: Int) -> ReaderMCPTextPayload? {
         guard let (session, paper) = sessionAndPaper(for: sessionID) else { return nil }
-
-        guard let pageText = PDFService.shared.extractText(from: paper.pdfData, pageIndex: pageIndex) else {
+        guard let document = sessionDocuments[sessionID],
+              pageIndex >= 0, pageIndex < session.pageCount,
+              let page = document.page(at: pageIndex) else {
             return nil
         }
+
+        guard let pageText = page.string, !pageText.isEmpty else { return nil }
 
         touch(sessionID: session.id, currentPage: pageIndex)
 
@@ -223,13 +237,14 @@ final class ReaderMCPService {
 
     func getText(sessionID: UUID, pageRange: Range<Int>) -> ReaderMCPTextPayload? {
         guard let (session, paper) = sessionAndPaper(for: sessionID) else { return nil }
-        guard let text = PDFService.shared.extractText(from: paper.pdfData, pageRange: pageRange) else { return nil }
 
-        let endPage = max(pageRange.upperBound - 1, pageRange.lowerBound)
+        let validRange = pageRange.clamped(to: 0..<max(session.pageCount, 0))
+        guard !validRange.isEmpty else { return nil }
+
+        guard let text = PDFService.shared.extractText(from: paper.pdfData, pageRange: validRange) else { return nil }
+
+        let endPage = validRange.upperBound - 1
         touch(sessionID: session.id, currentPage: endPage)
-
-        let pageCount = PDFService.shared.getDocumentInfo(from: paper.pdfData)?.pageCount ?? paper.pageCount
-        let validRange = pageRange.clamped(to: 0..<max(pageCount, 0))
 
         var spans: [PDFTextSpan] = []
         var sources: [ReaderMCPSourceReference] = []
@@ -368,8 +383,9 @@ final class ReaderMCPService {
         source: ReaderMCPSourceReference,
         noteContent: String
     ) -> Annotation? {
-        guard let (_, paper) = sessionAndPaper(for: sessionID),
-              source.paperID == paper.id else {
+        guard let (session, paper) = sessionAndPaper(for: sessionID),
+              source.paperID == paper.id,
+              source.pageIndex >= 0, source.pageIndex < session.pageCount else {
             return nil
         }
 
@@ -391,13 +407,12 @@ final class ReaderMCPService {
     func snapshotState(sessionID: UUID) -> ReaderMCPStateSnapshot? {
         guard let (session, paper) = sessionAndPaper(for: sessionID) else { return nil }
 
-        let pageCount = PDFService.shared.getDocumentInfo(from: paper.pdfData)?.pageCount ?? paper.pageCount
         return ReaderMCPStateSnapshot(
             sessionID: session.id,
             paperID: paper.id,
             paperTitle: paper.title,
             currentPage: session.currentPage,
-            pageCount: pageCount,
+            pageCount: session.pageCount,
             annotationCount: paper.annotations.count,
             lastUpdatedAt: session.updatedAt
         )
@@ -414,7 +429,7 @@ final class ReaderMCPService {
     private func makePreview(from text: String, maxLength: Int = 120) -> String {
         let collapsed = text
             .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "  ", with: " ")
+            .replacingOccurrences(of: " +", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !collapsed.isEmpty else { return "No text extracted" }
@@ -446,6 +461,7 @@ final class ReaderMCPService {
             try data.write(to: url, options: [.atomic])
             return url
         } catch {
+            mcpLog.error("Failed to write MCP bridge snapshot: \(error.localizedDescription)")
             return nil
         }
     }
@@ -468,14 +484,12 @@ final class ReaderMCPService {
         for (sessionID, session) in sessions {
             guard let paper = sessionPapers[sessionID] else { continue }
 
-            let pageCount = PDFService.shared.getDocumentInfo(from: paper.pdfData)?.pageCount ?? paper.pageCount
-
             bridgeSessions[sessionID.uuidString] = ReaderMCPBridgeSession(
                 sessionID: sessionID.uuidString,
                 paperID: paper.id.uuidString,
                 paperTitle: paper.title,
                 currentPage: session.currentPage,
-                pageCount: pageCount,
+                pageCount: session.pageCount,
                 annotations: paper.annotations.count
             )
         }

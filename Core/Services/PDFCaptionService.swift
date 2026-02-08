@@ -40,7 +40,7 @@ final class PDFCaptionService {
     private func summarize(text: String) -> String {
         let collapsed = text
             .replacingOccurrences(of: "\n", with: " ")
-            .replacingOccurrences(of: "  ", with: " ")
+            .replacingOccurrences(of: " +", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !collapsed.isEmpty else { return "" }
