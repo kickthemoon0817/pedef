@@ -1,6 +1,8 @@
 import Testing
 import Foundation
 import CoreGraphics
+import AppKit
+import PDFKit
 @testable import Pedef
 
 @Suite("Paper Model Tests")
@@ -268,5 +270,87 @@ struct ArchiveStatisticsTests {
             totalFileSizeBytes: 0, uniqueAuthors: 0, uniqueKeywords: 0
         )
         #expect(fullProgress.readingProgress == 1.0)
+    }
+}
+
+@Suite("Reader MCP Entrypoint Tests")
+@MainActor
+struct ReaderMCPEntrypointTests {
+    @Test("Lists reader and developer entrypoints")
+    func testEntrypointCatalog() {
+        let service = ReaderMCPService.shared
+
+        let reader = service.listReaderEntrypoints().map(\.name)
+        let developer = service.listDeveloperEntrypoints().map(\.name)
+
+        #expect(reader.contains("pdf.get_text"))
+        #expect(reader.contains("pdf.capture_region"))
+        #expect(reader.contains("pdf.caption_region"))
+        #expect(developer.contains("dev.capture_page"))
+        #expect(developer.contains("dev.snapshot_reader_state"))
+    }
+
+    @Test("Captures region and captions through session entrypoints")
+    func testCaptureAndCaptionEntrypoints() {
+        let service = ReaderMCPService.shared
+        let paper = Paper(title: "MCP Capture", pdfData: makeImageBackedPDFData(), pageCount: 1)
+
+        let session = service.openSession(for: paper, currentPage: 0)
+        defer { service.closeSession(session.id) }
+
+        let rect = CGRect(x: 0, y: 0, width: 200, height: 200)
+        let capture = service.captureRegion(sessionID: session.id, pageIndex: 0, rect: rect, appearance: .light)
+
+        #expect(capture != nil)
+        #expect(capture?.mimeType == "image/png")
+        #expect(capture?.pngData.isEmpty == false)
+
+        let caption = service.captionRegion(sessionID: session.id, pageIndex: 0, rect: rect, appearance: .dark)
+        #expect(caption != nil)
+        #expect(caption?.caption.isEmpty == false)
+        #expect(caption?.source.pageIndex == 0)
+    }
+
+    @Test("Exports bridge snapshot for MCP adapter")
+    func testBridgeSnapshotExport() {
+        let service = ReaderMCPService.shared
+        let paper = Paper(title: "Bridge Export", pdfData: makeImageBackedPDFData(), pageCount: 1)
+        let session = service.openSession(for: paper, currentPage: 0)
+        defer { service.closeSession(session.id) }
+
+        let exportURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pedef-mcp-bridge-test-\(UUID().uuidString).json")
+
+        let written = service.writeBridgeSnapshot(fileURL: exportURL)
+        #expect(written == exportURL)
+
+        let data = try? Data(contentsOf: exportURL)
+        #expect(data != nil)
+
+        if let data,
+           let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let sessions = object["sessions"] as? [String: Any] {
+            #expect(sessions.keys.contains(session.id.uuidString))
+        } else {
+            #expect(Bool(false))
+        }
+
+        try? FileManager.default.removeItem(at: exportURL)
+    }
+
+    private func makeImageBackedPDFData() -> Data {
+        let imageSize = CGSize(width: 256, height: 256)
+        let image = NSImage(size: imageSize)
+        image.lockFocus()
+        NSColor.white.setFill()
+        NSRect(origin: .zero, size: imageSize).fill()
+        image.unlockFocus()
+
+        let document = PDFDocument()
+        if let page = PDFPage(image: image) {
+            document.insert(page, at: 0)
+        }
+
+        return document.dataRepresentation() ?? Data()
     }
 }
