@@ -138,6 +138,9 @@ struct PDFReaderView: View {
     private func handlePageChange(page: Int) {
         let oldPage = appState.currentPage
         appState.currentPage = page
+        if let sessionID = appState.readerMCPSessionID {
+            ReaderMCPService.shared.updateCurrentPage(sessionID: sessionID, currentPage: page)
+        }
         historyService.recordAction(
             .navigatePage,
             paperId: paper.id,

@@ -79,3 +79,11 @@ coverage/
 *.bak
 *.swp
 *.swo
+
+# Profiling
+*.profraw
+*.profdata
+
+# Local tooling
+.sisyphus/
+TODO.MD
