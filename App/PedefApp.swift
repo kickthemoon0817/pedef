@@ -92,6 +92,7 @@ final class AppState: ObservableObject {
     @Published var isAgentPanelVisible: Bool = false
     @Published var searchQuery: String = ""
     @Published var sidebarSelection: SidebarItem? = .library
+    @Published private(set) var readerMCPSessionID: UUID?
 
     enum SidebarItem: Hashable {
         case library
@@ -105,11 +106,22 @@ final class AppState: ObservableObject {
     }
 
     func openPaper(_ paper: Paper) {
+        if let existingSessionID = readerMCPSessionID {
+            ReaderMCPService.shared.closeSession(existingSessionID)
+        }
+
         currentPaper = paper
         currentPage = paper.currentPage
+        let session = ReaderMCPService.shared.openSession(for: paper, currentPage: paper.currentPage)
+        readerMCPSessionID = session.id
     }
 
     func closePaper() {
+        if let existingSessionID = readerMCPSessionID {
+            ReaderMCPService.shared.closeSession(existingSessionID)
+            readerMCPSessionID = nil
+        }
+
         currentPaper = nil
         selectedText = nil
         currentPage = 0
