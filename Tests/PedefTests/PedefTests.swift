@@ -49,6 +49,107 @@ struct AnnotationTests {
         #expect(AnnotationType.textNote.displayName == "Text Note")
         #expect(AnnotationType.bookmark.displayName == "Bookmark")
     }
+
+    @Test("Annotation has note detection")
+    func testHasNote() {
+        let annotation = Annotation(type: .highlight, pageIndex: 0, bounds: .zero)
+        #expect(annotation.hasNote == false)
+
+        annotation.noteContent = ""
+        #expect(annotation.hasNote == false)
+
+        annotation.noteContent = "A comment"
+        #expect(annotation.hasNote == true)
+    }
+
+    @Test("Annotation display text priority")
+    func testDisplayText() {
+        let annotation = Annotation(type: .highlight, pageIndex: 0, bounds: .zero)
+        // No content → type name
+        #expect(annotation.displayText == "Highlight")
+
+        // With selected text
+        annotation.selectedText = "Selected"
+        #expect(annotation.displayText == "Selected")
+
+        // Note takes priority
+        annotation.noteContent = "My note"
+        #expect(annotation.displayText == "My note")
+    }
+
+    @Test("Annotation color change")
+    func testColorChange() {
+        let annotation = Annotation(type: .highlight, pageIndex: 0, bounds: .zero, color: .yellow)
+        #expect(annotation.colorHex == AnnotationColor.yellow.rawValue)
+
+        annotation.colorHex = AnnotationColor.blue.rawValue
+        #expect(annotation.colorHex == AnnotationColor.blue.rawValue)
+    }
+
+    @Test("Annotation tags management")
+    func testAnnotationTags() {
+        let annotation = Annotation(type: .highlight, pageIndex: 0, bounds: .zero)
+        #expect(annotation.tags.isEmpty)
+
+        annotation.tags.append("important")
+        annotation.tags.append("methodology")
+        #expect(annotation.tags.count == 2)
+        #expect(annotation.tags.contains("important"))
+
+        annotation.tags.removeAll { $0 == "important" }
+        #expect(annotation.tags.count == 1)
+        #expect(!annotation.tags.contains("important"))
+    }
+
+    @Test("Bookmark annotation creation")
+    func testBookmarkAnnotation() {
+        let bookmark = Annotation(type: .bookmark, pageIndex: 5, bounds: .zero)
+        #expect(bookmark.type == .bookmark)
+        #expect(bookmark.pageIndex == 5)
+
+        // Bookmark with title
+        bookmark.noteContent = "Chapter 3"
+        #expect(bookmark.hasNote)
+        #expect(bookmark.displayText == "Chapter 3")
+    }
+
+    @Test("Sticky note annotation creation")
+    func testStickyNoteAnnotation() {
+        let note = Annotation(type: .stickyNote, pageIndex: 2, bounds: .zero)
+        note.noteContent = "Remember to review this section"
+        note.selectedText = "The results show..."
+
+        #expect(note.type == .stickyNote)
+        #expect(note.hasNote)
+        #expect(note.selectedText != nil)
+    }
+
+    @Test("Annotation sorting by position")
+    func testSortByPosition() {
+        let a1 = Annotation(type: .highlight, pageIndex: 2, bounds: CGRect(x: 0, y: 100, width: 50, height: 10))
+        let a2 = Annotation(type: .highlight, pageIndex: 1, bounds: CGRect(x: 0, y: 50, width: 50, height: 10))
+        let a3 = Annotation(type: .highlight, pageIndex: 2, bounds: CGRect(x: 0, y: 50, width: 50, height: 10))
+
+        let sorted = Annotation.sortByPosition([a1, a2, a3])
+        #expect(sorted[0].pageIndex == 1) // a2: page 1
+        #expect(sorted[1].pageIndex == 2) // a3: page 2, y=50
+        #expect(sorted[2].pageIndex == 2) // a1: page 2, y=100
+    }
+
+    @Test("Annotation color predefined values")
+    func testAnnotationColors() {
+        #expect(AnnotationColor.allCases.count == 7)
+        #expect(AnnotationColor.yellow.displayName == "Yellow")
+        #expect(AnnotationColor.blue.displayName == "Blue")
+        #expect(!AnnotationColor.yellow.rawValue.isEmpty)
+    }
+
+    @Test("All annotation types have system images")
+    func testAnnotationTypeSystemImages() {
+        for type in AnnotationType.allCases {
+            #expect(!type.systemImage.isEmpty, "Missing systemImage for \(type.displayName)")
+        }
+    }
 }
 
 @Suite("Collection Tests")
