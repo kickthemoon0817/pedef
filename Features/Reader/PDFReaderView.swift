@@ -25,7 +25,8 @@ struct PDFReaderView: View {
                 onOutlineSelect: navigateToOutlineItem,
                 onClose: { appState.closePaper() },
                 onToggleAgent: { appState.isAgentPanelVisible.toggle() },
-                isAgentVisible: appState.isAgentPanelVisible
+                isAgentVisible: appState.isAgentPanelVisible,
+                isCurrentPageBookmarked: isCurrentPageBookmarked
             )
 
             // Main content area
@@ -77,8 +78,12 @@ struct PDFReaderView: View {
                         .fill(PedefTheme.TextColor.tertiary.opacity(0.15))
                         .frame(width: 1)
 
-                    AnnotationSidebarView(paper: paper, currentPage: appState.currentPage)
-                        .frame(minWidth: 260, idealWidth: 300, maxWidth: 360)
+                    AnnotationSidebarView(
+                        paper: paper,
+                        currentPage: appState.currentPage,
+                        onNavigateToPage: { page in handlePageChange(page: page) }
+                    )
+                    .frame(minWidth: 260, idealWidth: 320, maxWidth: 380)
                 }
             }
         }
@@ -114,6 +119,12 @@ struct PDFReaderView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: .highlightSelection)) { _ in
             createHighlight()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .addBookmark)) { _ in
+            toggleBookmark()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .addNote)) { _ in
+            createStickyNote()
         }
     }
 
@@ -217,6 +228,67 @@ struct PDFReaderView: View {
 
         appState.selectedText = nil
     }
+
+    private func toggleBookmark() {
+        let currentPage = appState.currentPage
+        if let existing = paper.annotations.first(where: { $0.type == .bookmark && $0.pageIndex == currentPage }) {
+            paper.annotations.removeAll { $0.id == existing.id }
+            historyService.recordAction(
+                .deleteAnnotation,
+                paperId: paper.id,
+                annotationId: existing.id
+            )
+        } else {
+            let bookmark = Annotation(type: .bookmark, pageIndex: currentPage, bounds: .zero)
+            bookmark.paper = paper
+            paper.annotations.append(bookmark)
+            historyService.recordAction(
+                .createBookmark,
+                paperId: paper.id,
+                annotationId: bookmark.id,
+                details: AnnotationDetails(
+                    pageIndex: currentPage,
+                    annotationType: "bookmark",
+                    selectedText: nil
+                )
+            )
+        }
+    }
+
+    private var isCurrentPageBookmarked: Bool {
+        paper.annotations.contains { $0.type == .bookmark && $0.pageIndex == appState.currentPage }
+    }
+
+    private func createStickyNote() {
+        let annotation = Annotation(
+            type: .stickyNote,
+            pageIndex: appState.currentPage,
+            bounds: .zero
+        )
+        // If there's selected text, use it as context
+        if let selectedText = appState.selectedText, !selectedText.isEmpty {
+            annotation.selectedText = selectedText
+            appState.selectedText = nil
+        }
+        annotation.paper = paper
+        paper.annotations.append(annotation)
+
+        historyService.recordAction(
+            .createNote,
+            paperId: paper.id,
+            annotationId: annotation.id,
+            details: AnnotationDetails(
+                pageIndex: appState.currentPage,
+                annotationType: "stickyNote",
+                selectedText: annotation.selectedText
+            )
+        )
+
+        // Make sure annotation sidebar is visible and switch to notes tab
+        if !showAnnotationSidebar {
+            showAnnotationSidebar = true
+        }
+    }
 }
 
 // MARK: - Reader Header Bar
@@ -231,6 +303,7 @@ struct ReaderHeaderBar: View {
     let onClose: () -> Void
     let onToggleAgent: () -> Void
     let isAgentVisible: Bool
+    var isCurrentPageBookmarked: Bool = false
 
     var body: some View {
         HStack(spacing: PedefTheme.Spacing.sm) {
@@ -307,10 +380,10 @@ struct ReaderHeaderBar: View {
                 Button {
                     NotificationCenter.default.post(name: .addBookmark, object: nil)
                 } label: {
-                    Image(systemName: "bookmark")
+                    Image(systemName: isCurrentPageBookmarked ? "bookmark.fill" : "bookmark")
                 }
-                .buttonStyle(PedefToolbarButtonStyle())
-                .help("Bookmark (⇧⌘B)")
+                .buttonStyle(PedefToolbarButtonStyle(isActive: isCurrentPageBookmarked))
+                .help(isCurrentPageBookmarked ? "Remove Bookmark (⇧⌘B)" : "Bookmark (⇧⌘B)")
 
                 Rectangle()
                     .fill(PedefTheme.TextColor.tertiary.opacity(0.2))
@@ -829,345 +902,6 @@ struct OutlineItemView: View {
     }
 }
 
-// MARK: - Annotation Sidebar
-
-struct AnnotationSidebarView: View {
-    @Bindable var paper: Paper
-    let currentPage: Int
-    @State private var selectedAnnotation: Annotation?
-    @State private var filterType: AnnotationType?
-    @State private var searchText = ""
-
-    var filteredAnnotations: [Annotation] {
-        var result = Annotation.sortByPosition(paper.annotations)
-        if let filter = filterType {
-            result = result.filter { $0.type == filter }
-        }
-        if !searchText.isEmpty {
-            result = result.filter {
-                ($0.selectedText ?? "").localizedCaseInsensitiveContains(searchText) ||
-                ($0.noteContent ?? "").localizedCaseInsensitiveContains(searchText)
-            }
-        }
-        return result
-    }
-
-    var annotationsOnCurrentPage: [Annotation] {
-        filteredAnnotations.filter { $0.pageIndex == currentPage }
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Text("Annotations")
-                    .font(PedefTheme.Typography.headline)
-                    .foregroundStyle(PedefTheme.TextColor.primary)
-
-                Spacer()
-
-                Text("\(paper.annotations.count)")
-                    .font(PedefTheme.Typography.caption)
-                    .foregroundStyle(PedefTheme.TextColor.tertiary)
-                    .padding(.horizontal, PedefTheme.Spacing.sm)
-                    .padding(.vertical, PedefTheme.Spacing.xxxs)
-                    .background(PedefTheme.Surface.hover, in: Capsule())
-
-                Menu {
-                    Button("All") { filterType = nil }
-                    Divider()
-                    ForEach(AnnotationType.allCases, id: \.self) { type in
-                        Button {
-                            filterType = type
-                        } label: {
-                            Label(type.displayName, systemImage: type.systemImage)
-                        }
-                    }
-                } label: {
-                    Image(systemName: filterType == nil ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(filterType != nil ? PedefTheme.Brand.indigo : PedefTheme.TextColor.tertiary)
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-            }
-            .padding(.horizontal, PedefTheme.Spacing.lg)
-            .padding(.vertical, PedefTheme.Spacing.md)
-
-            // Search
-            PedefSearchField(text: $searchText, placeholder: "Search annotations...")
-                .padding(.horizontal, PedefTheme.Spacing.lg)
-                .padding(.bottom, PedefTheme.Spacing.sm)
-
-            Rectangle()
-                .fill(PedefTheme.TextColor.tertiary.opacity(0.12))
-                .frame(height: 1)
-
-            // Annotation List
-            if filteredAnnotations.isEmpty {
-                VStack(spacing: PedefTheme.Spacing.md) {
-                    Image(systemName: "highlighter")
-                        .font(.system(size: 32))
-                        .foregroundStyle(PedefTheme.TextColor.tertiary)
-
-                    Text("No Annotations")
-                        .font(PedefTheme.Typography.headline)
-                        .foregroundStyle(PedefTheme.TextColor.secondary)
-
-                    Text("Select text and use ⌘H to highlight")
-                        .font(PedefTheme.Typography.caption)
-                        .foregroundStyle(PedefTheme.TextColor.tertiary)
-                        .multilineTextAlignment(.center)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding()
-            } else {
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        if !annotationsOnCurrentPage.isEmpty {
-                            AnnotationSectionHeader(title: "This Page", count: annotationsOnCurrentPage.count)
-                            ForEach(annotationsOnCurrentPage) { annotation in
-                                AnnotationRow(annotation: annotation)
-                            }
-                        }
-
-                        let otherAnnotations = filteredAnnotations.filter { $0.pageIndex != currentPage }
-                        if !otherAnnotations.isEmpty {
-                            AnnotationSectionHeader(title: "Other Pages", count: otherAnnotations.count)
-                            ForEach(otherAnnotations) { annotation in
-                                AnnotationRow(annotation: annotation)
-                            }
-                        }
-                    }
-                    .padding(.vertical, PedefTheme.Spacing.xs)
-                }
-            }
-        }
-        .background(PedefTheme.Surface.sidebar)
-    }
-}
-
-struct AnnotationSectionHeader: View {
-    let title: String
-    let count: Int
-
-    var body: some View {
-        HStack {
-            Text(title.uppercased())
-                .font(PedefTheme.Typography.caption2)
-                .tracking(0.8)
-                .foregroundStyle(PedefTheme.TextColor.tertiary)
-
-            Text("\(count)")
-                .font(PedefTheme.Typography.caption2)
-                .foregroundStyle(PedefTheme.TextColor.tertiary)
-                .padding(.horizontal, PedefTheme.Spacing.xs)
-                .padding(.vertical, 1)
-                .background(PedefTheme.Surface.hover, in: Capsule())
-
-            Spacer()
-        }
-        .padding(.horizontal, PedefTheme.Spacing.lg)
-        .padding(.top, PedefTheme.Spacing.md)
-        .padding(.bottom, PedefTheme.Spacing.xs)
-    }
-}
-
-struct AnnotationRow: View {
-    @Bindable var annotation: Annotation
-    @Environment(\.modelContext) private var modelContext
-    @State private var isHovering = false
-    @State private var showEditNote = false
-    @State private var showColorPicker = false
-    @State private var showAddTag = false
-    @State private var editingNote = ""
-    @State private var newTag = ""
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(Color(hex: annotation.colorHex) ?? .yellow)
-                    .frame(width: 10, height: 10)
-
-                Image(systemName: annotation.type.systemImage)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Text("Page \(annotation.pageIndex + 1)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Text(annotation.createdDate, style: .relative)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-
-            if let text = annotation.selectedText, !text.isEmpty {
-                Text(text)
-                    .font(.callout)
-                    .lineLimit(3)
-                    .padding(.leading, 18)
-            }
-
-            if let note = annotation.noteContent, !note.isEmpty {
-                Text(note)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .padding(.leading, 18)
-                    .padding(.top, 2)
-            }
-
-            if !annotation.tags.isEmpty {
-                HStack(spacing: PedefTheme.Spacing.xxs) {
-                    ForEach(annotation.tags, id: \.self) { tag in
-                        Text(tag)
-                            .font(PedefTheme.Typography.caption2)
-                            .padding(.horizontal, PedefTheme.Spacing.xs)
-                            .padding(.vertical, PedefTheme.Spacing.xxxs)
-                            .background(PedefTheme.Brand.indigo.opacity(0.10), in: Capsule())
-                            .foregroundStyle(PedefTheme.Brand.indigo)
-                    }
-                }
-                .padding(.leading, 18)
-            }
-        }
-        .padding(.horizontal, PedefTheme.Spacing.lg)
-        .padding(.vertical, PedefTheme.Spacing.sm)
-        .background(isHovering ? PedefTheme.Surface.hover : Color.clear)
-        .onHover { isHovering = $0 }
-        .contextMenu {
-            Button("Edit Note") {
-                editingNote = annotation.noteContent ?? ""
-                showEditNote = true
-            }
-
-            Menu("Change Color") {
-                ForEach(AnnotationColor.allCases, id: \.self) { color in
-                    Button {
-                        annotation.colorHex = color.rawValue
-                        annotation.modifiedDate = Date()
-                    } label: {
-                        Label(color.displayName, systemImage: "circle.fill")
-                    }
-                }
-            }
-
-            Button("Add Tag") {
-                showAddTag = true
-            }
-
-            Divider()
-
-            Button("Copy Text") {
-                if let text = annotation.selectedText {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(text, forType: .string)
-                }
-            }
-            .disabled(annotation.selectedText?.isEmpty ?? true)
-
-            Divider()
-
-            Button("Delete", role: .destructive) {
-                if let paper = annotation.paper {
-                    paper.annotations.removeAll { $0.id == annotation.id }
-                }
-                modelContext.delete(annotation)
-            }
-        }
-        .popover(isPresented: $showEditNote) {
-            VStack(spacing: PedefTheme.Spacing.md) {
-                Text("Edit Note")
-                    .font(PedefTheme.Typography.headline)
-
-                TextEditor(text: $editingNote)
-                    .frame(width: 250, height: 100)
-                    .font(PedefTheme.Typography.body)
-                    .padding(PedefTheme.Spacing.xs)
-                    .background(PedefTheme.Surface.hover)
-                    .clipShape(RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
-
-                HStack {
-                    Button("Cancel") {
-                        showEditNote = false
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(PedefTheme.TextColor.secondary)
-                    .keyboardShortcut(.cancelAction)
-
-                    Spacer()
-
-                    Button {
-                        annotation.noteContent = editingNote.isEmpty ? nil : editingNote
-                        annotation.modifiedDate = Date()
-                        showEditNote = false
-                    } label: {
-                        Text("Save")
-                            .font(PedefTheme.Typography.subheadline)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, PedefTheme.Spacing.lg)
-                            .padding(.vertical, PedefTheme.Spacing.xs)
-                            .background(PedefTheme.Brand.indigo, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
-                    }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(.defaultAction)
-                }
-            }
-            .padding(PedefTheme.Spacing.lg)
-            .frame(width: 300)
-        }
-        .popover(isPresented: $showAddTag) {
-            VStack(spacing: PedefTheme.Spacing.md) {
-                Text("Add Tag")
-                    .font(PedefTheme.Typography.headline)
-
-                TextField("Tag name", text: $newTag)
-                    .textFieldStyle(.plain)
-                    .font(PedefTheme.Typography.body)
-                    .padding(PedefTheme.Spacing.sm)
-                    .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: PedefTheme.Radius.sm)
-                            .stroke(PedefTheme.Brand.indigo.opacity(0.5), lineWidth: 1)
-                    )
-
-                HStack {
-                    Button("Cancel") {
-                        newTag = ""
-                        showAddTag = false
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(PedefTheme.TextColor.secondary)
-                    .keyboardShortcut(.cancelAction)
-
-                    Spacer()
-
-                    Button {
-                        if !newTag.isEmpty && !annotation.tags.contains(newTag) {
-                            annotation.tags.append(newTag.lowercased())
-                            annotation.modifiedDate = Date()
-                        }
-                        newTag = ""
-                        showAddTag = false
-                    } label: {
-                        Text("Add")
-                            .font(PedefTheme.Typography.subheadline)
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, PedefTheme.Spacing.lg)
-                            .padding(.vertical, PedefTheme.Spacing.xs)
-                            .background(newTag.isEmpty ? PedefTheme.TextColor.tertiary : PedefTheme.Brand.indigo, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
-                    }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(newTag.isEmpty)
-                }
-            }
-            .padding(PedefTheme.Spacing.lg)
-            .frame(width: 250)
-        }
-    }
-}
+// NOTE: AnnotationSidebarView, AnnotationSectionHeader, and related
+// components have been moved to AnnotationSidebarView.swift for
+// better organization and the new tabbed sidebar design.
