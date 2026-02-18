@@ -170,7 +170,9 @@ struct TimelineFilters: View {
                 .padding(.vertical, PedefTheme.Spacing.xs)
                 .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
             }
+            #if os(macOS)
             .menuStyle(.borderlessButton)
+            #endif
             .fixedSize()
 
             Spacer()
