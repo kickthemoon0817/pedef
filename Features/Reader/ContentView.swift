@@ -832,8 +832,8 @@ struct PaperCard: View {
                     .aspectRatio(0.75, contentMode: .fit)
                     .overlay {
                         if let thumbnailData = paper.thumbnailData,
-                           let nsImage = NSImage(data: thumbnailData) {
-                            Image(nsImage: nsImage)
+                           let image = PlatformImage(data: thumbnailData) {
+                            Image(platformImage: image)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
                                 .clipped()
@@ -1039,11 +1039,11 @@ struct PaperContextMenu: View {
 
         do {
             try paper.pdfData.write(to: tempURL)
-            NSWorkspace.shared.selectFile(tempURL.path, inFileViewerRootedAtPath: tempDir.path)
+            PlatformFileActions.revealInFileBrowser(url: tempURL)
         } catch {
             // Fallback: open Documents folder
             if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-                NSWorkspace.shared.open(documentsURL)
+                PlatformFileActions.openDirectory(url: documentsURL)
             }
         }
     }
@@ -1083,8 +1083,8 @@ struct PaperRow: View {
                 .frame(width: 44, height: 60)
                 .overlay {
                     if let thumbnailData = paper.thumbnailData,
-                       let nsImage = NSImage(data: thumbnailData) {
-                        Image(nsImage: nsImage)
+                       let image = PlatformImage(data: thumbnailData) {
+                        Image(platformImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .clipped()
