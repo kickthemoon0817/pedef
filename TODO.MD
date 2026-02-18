@@ -1,0 +1,3 @@
+[] AI-friendly pdf reader, which provides entrypoints for LLMs and also the mcp connected to it, so agents could read texts and capture images, and also do captioning and so on, so providing interactive reading and understanding, even experiencing for users to read the papers. Also, other entrypoints for LLMs to develop current application features, not only as code but also as image or the things the agents need, e.g. so not to use the system's screen capture but use the pdf reader's internal image capturing features, and light/dark mode support, etc.
+
+[] With a liitle bit of LLMs, and using the ML model, make a "neural links" between the user's papers.

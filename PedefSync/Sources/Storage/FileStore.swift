@@ -19,20 +19,20 @@ struct FileStore: Sendable {
 
     /// Save PDF data for a paper. Overwrites if exists.
     func savePDF(paperID: String, data: Data) throws {
-        let path = pdfURL(for: paperID)
+        let path = try pdfURL(for: paperID)
         try data.write(to: path, options: .atomic)
     }
 
     /// Read PDF data for a paper. Returns nil if not found.
     func readPDF(paperID: String) -> Data? {
-        let path = pdfURL(for: paperID)
+        guard let path = try? pdfURL(for: paperID) else { return nil }
         return try? Data(contentsOf: path)
     }
 
     /// Delete PDF file for a paper. Returns true if deleted.
     @discardableResult
     func deletePDF(paperID: String) -> Bool {
-        let path = pdfURL(for: paperID)
+        guard let path = try? pdfURL(for: paperID) else { return false }
         do {
             try FileManager.default.removeItem(at: path)
             return true
@@ -43,12 +43,13 @@ struct FileStore: Sendable {
 
     /// Check if a PDF exists for a paper.
     func pdfExists(paperID: String) -> Bool {
-        FileManager.default.fileExists(atPath: pdfURL(for: paperID).path)
+        guard let path = try? pdfURL(for: paperID) else { return false }
+        return FileManager.default.fileExists(atPath: path.path)
     }
 
     /// Get the file size of a stored PDF. Returns nil if not found.
     func pdfFileSize(paperID: String) -> Int64? {
-        let path = pdfURL(for: paperID)
+        guard let path = try? pdfURL(for: paperID) else { return nil }
         guard let attrs = try? FileManager.default.attributesOfItem(atPath: path.path) else {
             return nil
         }
@@ -65,8 +66,18 @@ struct FileStore: Sendable {
 
     // MARK: - Helpers
 
-    private func pdfURL(for paperID: String) -> URL {
-        directory.appendingPathComponent("\(paperID).pdf")
+    private func pdfURL(for paperID: String) throws -> URL {
+        // Validate paperID to prevent path traversal attacks
+        guard !paperID.isEmpty else { throw FileStoreError.invalidPaperID }
+        guard !paperID.contains("/") && !paperID.contains("\\") && !paperID.contains("..") else {
+            throw FileStoreError.invalidPaperID
+        }
+        return directory.appendingPathComponent("\(paperID).pdf")
     }
 }
 
+// MARK: - Error Types
+
+enum FileStoreError: Error {
+    case invalidPaperID
+}

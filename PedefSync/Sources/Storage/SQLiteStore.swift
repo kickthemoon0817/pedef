@@ -9,6 +9,7 @@ import SwiftProtobuf
 /// Delta sync queries filter by `modified_date > sinceDate`.
 final class SQLiteStore: @unchecked Sendable {
     let db: Connection
+    private let dbLock = NSLock()
 
     // MARK: - Table Definitions
 
@@ -88,6 +89,7 @@ final class SQLiteStore: @unchecked Sendable {
     static let tColorHex = Expression<String?>("color_hex")
     static let tUsageCount = Expression<Int>("usage_count")
     static let tCreatedDate = Expression<String>("created_date")
+    static let tModifiedDate = Expression<String>("modified_date")
     static let tPaperIds = Expression<String>("paper_ids")             // JSON array
     static let tIsDeleted = Expression<Bool>("is_deleted")
 
@@ -165,6 +167,8 @@ final class SQLiteStore: @unchecked Sendable {
             t.column(Self.aCreatedDate)
             t.column(Self.aModifiedDate)
             t.column(Self.aIsDeleted, defaultValue: false)
+            // Foreign key constraint: annotations.paper_id -> papers.id
+            t.foreignKey(Self.aPaperId, references: Self.papers, Self.pId, delete: .cascade)
         })
         try db.run(Self.annotations.createIndex(Self.aModifiedDate, ifNotExists: true))
         try db.run(Self.annotations.createIndex(Self.aPaperId, ifNotExists: true))
@@ -192,9 +196,11 @@ final class SQLiteStore: @unchecked Sendable {
             t.column(Self.tColorHex)
             t.column(Self.tUsageCount, defaultValue: 0)
             t.column(Self.tCreatedDate)
+            t.column(Self.tModifiedDate)
             t.column(Self.tPaperIds, defaultValue: "[]")
             t.column(Self.tIsDeleted, defaultValue: false)
         })
+        try db.run(Self.tags.createIndex(Self.tModifiedDate, ifNotExists: true))
     }
 }
 
@@ -247,7 +253,10 @@ extension SQLiteStore {
 extension SQLiteStore {
 
     func upsertPaper(_ p: Pedef_PaperMetadata) throws {
+        guard !p.id.isEmpty else { throw StorageError.invalidID }
         let thumb: SQLite.Blob? = p.thumbnailData.isEmpty ? nil : SQLite.Blob(bytes: [UInt8](p.thumbnailData))
+        dbLock.lock()
+        defer { dbLock.unlock() }
         try db.run(Self.papers.insert(or: .replace,
             Self.pId <- p.id,
             Self.pTitle <- p.title,
@@ -279,16 +288,24 @@ extension SQLiteStore {
     }
 
     func getPaper(id: String) throws -> Pedef_PaperMetadata? {
+        guard !id.isEmpty else { throw StorageError.invalidID }
+        dbLock.lock()
+        defer { dbLock.unlock() }
         guard let row = try db.pluck(Self.papers.filter(Self.pId == id)) else { return nil }
         return paperFromRow(row)
     }
 
     func listPapers(includeDeleted: Bool = false) throws -> [Pedef_PaperMetadata] {
+        dbLock.lock()
+        defer { dbLock.unlock() }
         let query = includeDeleted ? Self.papers : Self.papers.filter(Self.pIsDeleted == false)
         return try db.prepare(query).map { paperFromRow($0) }
     }
 
     func deletePaper(id: String, hard: Bool = false) throws {
+        guard !id.isEmpty else { throw StorageError.invalidID }
+        dbLock.lock()
+        defer { dbLock.unlock() }
         if hard {
             try db.run(Self.papers.filter(Self.pId == id).delete())
         } else {
@@ -301,6 +318,8 @@ extension SQLiteStore {
     }
 
     func papersModifiedSince(_ sinceDate: String) throws -> [Pedef_PaperMetadata] {
+        dbLock.lock()
+        defer { dbLock.unlock() }
         try db.prepare(Self.papers.filter(Self.pModifiedDate > sinceDate)).map { paperFromRow($0) }
     }
 
@@ -331,11 +350,16 @@ extension SQLiteStore {
             p.lastOpenedDate = ts
         }
         p.totalReadingTime = row[Self.pTotalReadingTime]
+        // Safe unwrap with fallback to current date
         if let ts = Self.stringToTimestamp(row[Self.pImportedDate]) {
             p.importedDate = ts
+        } else {
+            p.importedDate = Google_Protobuf_Timestamp(date: Date())
         }
         if let ts = Self.stringToTimestamp(row[Self.pModifiedDate]) {
             p.modifiedDate = ts
+        } else {
+            p.modifiedDate = Google_Protobuf_Timestamp(date: Date())
         }
         p.customMetadata = Self.decodeJSONMap(row[Self.pCustomMetadata])
         p.tags = Self.decodeJSONArray(row[Self.pTags])
@@ -351,7 +375,11 @@ extension SQLiteStore {
 extension SQLiteStore {
 
     func upsertAnnotation(_ a: Pedef_AnnotationDTO) throws {
+        guard !a.id.isEmpty else { throw StorageError.invalidID }
+        guard !a.paperID.isEmpty else { throw StorageError.invalidID }
         let drawing: SQLite.Blob? = a.drawingData.isEmpty ? nil : SQLite.Blob(bytes: [UInt8](a.drawingData))
+        dbLock.lock()
+        defer { dbLock.unlock() }
         try db.run(Self.annotations.insert(or: .replace,
             Self.aId <- a.id,
             Self.aPaperId <- a.paperID,
@@ -373,17 +401,26 @@ extension SQLiteStore {
     }
 
     func getAnnotation(id: String) throws -> Pedef_AnnotationDTO? {
+        guard !id.isEmpty else { throw StorageError.invalidID }
+        dbLock.lock()
+        defer { dbLock.unlock() }
         guard let row = try db.pluck(Self.annotations.filter(Self.aId == id)) else { return nil }
         return annotationFromRow(row)
     }
 
     func getAnnotationsForPaper(paperId: String, includeDeleted: Bool = false) throws -> [Pedef_AnnotationDTO] {
+        guard !paperId.isEmpty else { throw StorageError.invalidID }
+        dbLock.lock()
+        defer { dbLock.unlock() }
         var query = Self.annotations.filter(Self.aPaperId == paperId)
         if !includeDeleted { query = query.filter(Self.aIsDeleted == false) }
         return try db.prepare(query).map { annotationFromRow($0) }
     }
 
     func deleteAnnotation(id: String, hard: Bool = false) throws {
+        guard !id.isEmpty else { throw StorageError.invalidID }
+        dbLock.lock()
+        defer { dbLock.unlock() }
         if hard {
             try db.run(Self.annotations.filter(Self.aId == id).delete())
         } else {
@@ -396,6 +433,8 @@ extension SQLiteStore {
     }
 
     func annotationsModifiedSince(_ sinceDate: String) throws -> [Pedef_AnnotationDTO] {
+        dbLock.lock()
+        defer { dbLock.unlock() }
         try db.prepare(Self.annotations.filter(Self.aModifiedDate > sinceDate)).map { annotationFromRow($0) }
     }
 
@@ -434,7 +473,10 @@ extension SQLiteStore {
 extension SQLiteStore {
 
     func upsertCollection(_ c: Pedef_CollectionDTO) throws {
+        guard !c.id.isEmpty else { throw StorageError.invalidID }
         let rules: SQLite.Blob? = c.smartRulesData.isEmpty ? nil : SQLite.Blob(bytes: [UInt8](c.smartRulesData))
+        dbLock.lock()
+        defer { dbLock.unlock() }
         try db.run(Self.collections.insert(or: .replace,
             Self.cId <- c.id,
             Self.cName <- c.name,
@@ -453,16 +495,24 @@ extension SQLiteStore {
     }
 
     func getCollection(id: String) throws -> Pedef_CollectionDTO? {
+        guard !id.isEmpty else { throw StorageError.invalidID }
+        dbLock.lock()
+        defer { dbLock.unlock() }
         guard let row = try db.pluck(Self.collections.filter(Self.cId == id)) else { return nil }
         return collectionFromRow(row)
     }
 
     func listCollections(includeDeleted: Bool = false) throws -> [Pedef_CollectionDTO] {
+        dbLock.lock()
+        defer { dbLock.unlock() }
         let query = includeDeleted ? Self.collections : Self.collections.filter(Self.cIsDeleted == false)
         return try db.prepare(query).map { collectionFromRow($0) }
     }
 
     func deleteCollection(id: String, hard: Bool = false) throws {
+        guard !id.isEmpty else { throw StorageError.invalidID }
+        dbLock.lock()
+        defer { dbLock.unlock() }
         if hard {
             try db.run(Self.collections.filter(Self.cId == id).delete())
         } else {
@@ -475,6 +525,8 @@ extension SQLiteStore {
     }
 
     func collectionsModifiedSince(_ sinceDate: String) throws -> [Pedef_CollectionDTO] {
+        dbLock.lock()
+        defer { dbLock.unlock() }
         try db.prepare(Self.collections.filter(Self.cModifiedDate > sinceDate)).map { collectionFromRow($0) }
     }
 
@@ -508,41 +560,55 @@ extension SQLiteStore {
 extension SQLiteStore {
 
     func upsertTag(_ t: Pedef_TagDTO) throws {
+        guard !t.id.isEmpty else { throw StorageError.invalidID }
+        dbLock.lock()
+        defer { dbLock.unlock() }
         try db.run(Self.tags.insert(or: .replace,
             Self.tId <- t.id,
             Self.tName <- t.name,
             Self.tColorHex <- (t.colorHex.isEmpty ? nil : t.colorHex),
             Self.tUsageCount <- Int(t.usageCount),
             Self.tCreatedDate <- (t.hasCreatedDate ? Self.timestampToString(t.createdDate) : Self.iso8601.string(from: Date())),
+            Self.tModifiedDate <- Self.iso8601.string(from: Date()),
             Self.tPaperIds <- Self.encodeJSONArray(t.paperIds),
             Self.tIsDeleted <- t.isDeleted
         ))
     }
 
     func getTag(id: String) throws -> Pedef_TagDTO? {
+        guard !id.isEmpty else { throw StorageError.invalidID }
+        dbLock.lock()
+        defer { dbLock.unlock() }
         guard let row = try db.pluck(Self.tags.filter(Self.tId == id)) else { return nil }
         return tagFromRow(row)
     }
 
     func listTags(includeDeleted: Bool = false) throws -> [Pedef_TagDTO] {
+        dbLock.lock()
+        defer { dbLock.unlock() }
         let query = includeDeleted ? Self.tags : Self.tags.filter(Self.tIsDeleted == false)
         return try db.prepare(query).map { tagFromRow($0) }
     }
 
     func deleteTag(id: String, hard: Bool = false) throws {
+        guard !id.isEmpty else { throw StorageError.invalidID }
+        dbLock.lock()
+        defer { dbLock.unlock() }
         if hard {
             try db.run(Self.tags.filter(Self.tId == id).delete())
         } else {
-            // Tags don't have a modified_date column — just set is_deleted
+            let now = Self.iso8601.string(from: Date())
             try db.run(Self.tags.filter(Self.tId == id).update(
-                Self.tIsDeleted <- true
+                Self.tIsDeleted <- true,
+                Self.tModifiedDate <- now
             ))
         }
     }
 
     func tagsModifiedSince(_ sinceDate: String) throws -> [Pedef_TagDTO] {
-        // Tags don't have modified_date; return all tags for delta sync
-        try db.prepare(Self.tags).map { tagFromRow($0) }
+        dbLock.lock()
+        defer { dbLock.unlock() }
+        try db.prepare(Self.tags.filter(Self.tModifiedDate > sinceDate)).map { tagFromRow($0) }
     }
 
     private func tagFromRow(_ row: Row) -> Pedef_TagDTO {
@@ -566,9 +632,17 @@ extension SQLiteStore {
 
     /// Hard-delete all soft-deleted records older than `beforeDate` (ISO 8601).
     func purgeDeletedBefore(date: String) throws {
+        dbLock.lock()
+        defer { dbLock.unlock() }
         try db.run(Self.papers.filter(Self.pIsDeleted == true && Self.pModifiedDate < date).delete())
         try db.run(Self.annotations.filter(Self.aIsDeleted == true && Self.aModifiedDate < date).delete())
         try db.run(Self.collections.filter(Self.cIsDeleted == true && Self.cModifiedDate < date).delete())
-        try db.run(Self.tags.filter(Self.tIsDeleted == true).delete())
+        try db.run(Self.tags.filter(Self.tIsDeleted == true && Self.tModifiedDate < date).delete())
     }
+}
+
+// MARK: - Error Types
+
+enum StorageError: Error {
+    case invalidID
 }
