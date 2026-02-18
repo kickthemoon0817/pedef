@@ -320,7 +320,7 @@ extension SQLiteStore {
     func papersModifiedSince(_ sinceDate: String) throws -> [Pedef_PaperMetadata] {
         dbLock.lock()
         defer { dbLock.unlock() }
-        try db.prepare(Self.papers.filter(Self.pModifiedDate > sinceDate)).map { paperFromRow($0) }
+        return try db.prepare(Self.papers.filter(Self.pModifiedDate > sinceDate)).map { paperFromRow($0) }
     }
 
     private func paperFromRow(_ row: Row) -> Pedef_PaperMetadata {
@@ -435,7 +435,7 @@ extension SQLiteStore {
     func annotationsModifiedSince(_ sinceDate: String) throws -> [Pedef_AnnotationDTO] {
         dbLock.lock()
         defer { dbLock.unlock() }
-        try db.prepare(Self.annotations.filter(Self.aModifiedDate > sinceDate)).map { annotationFromRow($0) }
+        return try db.prepare(Self.annotations.filter(Self.aModifiedDate > sinceDate)).map { annotationFromRow($0) }
     }
 
     private func annotationFromRow(_ row: Row) -> Pedef_AnnotationDTO {
@@ -527,7 +527,7 @@ extension SQLiteStore {
     func collectionsModifiedSince(_ sinceDate: String) throws -> [Pedef_CollectionDTO] {
         dbLock.lock()
         defer { dbLock.unlock() }
-        try db.prepare(Self.collections.filter(Self.cModifiedDate > sinceDate)).map { collectionFromRow($0) }
+        return try db.prepare(Self.collections.filter(Self.cModifiedDate > sinceDate)).map { collectionFromRow($0) }
     }
 
     private func collectionFromRow(_ row: Row) -> Pedef_CollectionDTO {
@@ -608,7 +608,7 @@ extension SQLiteStore {
     func tagsModifiedSince(_ sinceDate: String) throws -> [Pedef_TagDTO] {
         dbLock.lock()
         defer { dbLock.unlock() }
-        try db.prepare(Self.tags.filter(Self.tModifiedDate > sinceDate)).map { tagFromRow($0) }
+        return try db.prepare(Self.tags.filter(Self.tModifiedDate > sinceDate)).map { tagFromRow($0) }
     }
 
     private func tagFromRow(_ row: Row) -> Pedef_TagDTO {

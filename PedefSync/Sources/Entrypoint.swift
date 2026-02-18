@@ -33,13 +33,13 @@ struct PedefSyncServer: AsyncParsableCommand {
         print("  Port:     \(port)")
         print("  Data dir: \(dataDir)")
 
-        // TODO: Initialize storage (Branch 3)
-        // let sqliteStore = try SQLiteStore(path: "\(dataDir)/pedef.db")
-        // let fileStore = FileStore(directory: "\(dataDir)/pdfs")
+        // Initialize storage
+        let sqliteStore = try SQLiteStore(path: "\(dataDir)/pedef.db")
+        let fileStore = try FileStore(directory: "\(dataDir)/pdfs")
 
-        // TODO: Initialize services (Branch 4)
-        // let syncService = SyncServiceImpl(store: sqliteStore)
-        // let paperService = PaperServiceImpl(store: sqliteStore, fileStore: fileStore)
+        // Initialize services
+        let syncService = SyncServiceImpl(store: sqliteStore)
+        let paperService = PaperServiceImpl(store: sqliteStore, fileStore: fileStore)
 
         let server = GRPCServer(
             transport: .http2NIOPosix(
@@ -47,13 +47,11 @@ struct PedefSyncServer: AsyncParsableCommand {
                 transportSecurity: .plaintext
             ),
             services: [
-                // TODO: Register services (Branch 4)
-                // syncService,
-                // paperService,
+                syncService,
+                paperService,
             ],
             interceptors: [
-                // TODO: Register auth interceptor (Branch 4)
-                // AuthInterceptor(expectedToken: token),
+                AuthInterceptor(expectedToken: token),
             ]
         )
 
