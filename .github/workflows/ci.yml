@@ -32,8 +32,14 @@ jobs:
         run: swiftlint
         continue-on-error: true
 
-      - name: Build
+      - name: Build PedefSync server
+        run: cd PedefSync && swift build
+
+      - name: Test PedefSync server
+        run: cd PedefSync && swift test
+
+      - name: Build Pedef app
         run: xcodebuild -scheme Pedef -configuration Debug build -destination 'platform=macOS'
 
-      - name: Test
+      - name: Test Pedef app
         run: xcodebuild -scheme Pedef test -destination 'platform=macOS'
