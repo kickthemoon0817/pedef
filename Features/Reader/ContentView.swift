@@ -1,6 +1,9 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+#if os(macOS)
+import AppKit
+#endif
 
 // MARK: - Collection Colors
 
@@ -262,7 +265,9 @@ struct SidebarView: View {
             .padding(.horizontal, PedefTheme.Spacing.lg)
             .padding(.top, PedefTheme.Spacing.xl)
             .padding(.bottom, PedefTheme.Spacing.md)
+            #if os(macOS)
             .background(WindowDragArea())
+            #endif
 
             // Sidebar content
             ScrollView {
@@ -673,7 +678,9 @@ struct LibraryView: View {
                     .fill(PedefTheme.TextColor.tertiary.opacity(0.15))
                     .frame(height: 1)
             }
+            #if os(macOS)
             .background(WindowDragArea())
+            #endif
 
             // Content
             if papers.isEmpty {
@@ -1016,6 +1023,7 @@ struct PaperContextMenu: View {
     }
 
     private func exportPaper() {
+        #if os(macOS)
         let savePanel = NSSavePanel()
         savePanel.allowedContentTypes = [.pdf]
         savePanel.nameFieldStringValue = "\(paper.title).pdf"
@@ -1025,25 +1033,39 @@ struct PaperContextMenu: View {
                 do {
                     try paper.pdfData.write(to: url)
                 } catch {
-                    // Error handled silently - could add error reporting
                     print("Export failed: \(error.localizedDescription)")
                 }
             }
         }
+        #else
+        // On iOS/iPadOS, write to a temporary file and share via system share sheet
+        let tempDir = FileManager.default.temporaryDirectory
+        let tempURL = tempDir.appendingPathComponent("\(paper.title).pdf")
+        do {
+            try paper.pdfData.write(to: tempURL)
+            PlatformFileActions.sharePDF(url: tempURL)
+        } catch {
+            print("Export failed: \(error.localizedDescription)")
+        }
+        #endif
     }
 
     private func showInFinder() {
-        // Create a temporary file to show in Finder
         let tempDir = FileManager.default.temporaryDirectory
         let tempURL = tempDir.appendingPathComponent("\(paper.title).pdf")
 
         do {
             try paper.pdfData.write(to: tempURL)
+            #if os(macOS)
             PlatformFileActions.revealInFileBrowser(url: tempURL)
+            #else
+            PlatformFileActions.sharePDF(url: tempURL)
+            #endif
         } catch {
-            // Fallback: open Documents folder
             if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                #if os(macOS)
                 PlatformFileActions.openDirectory(url: documentsURL)
+                #endif
             }
         }
     }

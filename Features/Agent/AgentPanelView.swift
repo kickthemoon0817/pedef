@@ -739,7 +739,11 @@ struct GeneralSettingsView: View {
                 Button("Show in Finder") {
                     showDataInFinder()
                 }
+                #if os(macOS)
                 .buttonStyle(.link)
+                #else
+                .buttonStyle(.borderless)
+                #endif
             } header: {
                 Text("Storage")
             } footer: {

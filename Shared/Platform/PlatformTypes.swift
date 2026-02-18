@@ -89,5 +89,35 @@ enum PlatformFileActions {
         // iOS: No direct equivalent for opening directories.
         #endif
     }
+
+    /// Shares a PDF file via the system share sheet (iOS/iPadOS).
+    /// On macOS, this is a no-op since NSSavePanel is used directly.
+    static func sharePDF(url: URL) {
+        #if os(macOS)
+        // macOS: Use NSSavePanel directly — this method is not called on macOS.
+        #else
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first,
+              let rootViewController = windowScene.windows.first?.rootViewController else {
+            return
+        }
+        let activityVC = UIActivityViewController(
+            activityItems: [url],
+            applicationActivities: nil
+        )
+        // iPad requires a popover source
+        if let popover = activityVC.popoverPresentationController {
+            popover.sourceView = rootViewController.view
+            popover.sourceRect = CGRect(
+                x: rootViewController.view.bounds.midX,
+                y: rootViewController.view.bounds.midY,
+                width: 0, height: 0
+            )
+            popover.permittedArrowDirections = []
+        }
+        rootViewController.present(activityVC, animated: true)
+        #endif
+    }
 }
 

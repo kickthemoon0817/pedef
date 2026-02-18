@@ -60,10 +60,12 @@ struct PedefApp: App {
                 }
         }
         .modelContainer(sharedModelContainer)
+        #if os(macOS)
         .windowStyle(.hiddenTitleBar)
         .commands {
             PedefCommands()
         }
+        #endif
 
         #if os(macOS)
         Settings {

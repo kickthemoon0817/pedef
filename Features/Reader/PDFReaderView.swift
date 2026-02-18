@@ -363,7 +363,9 @@ struct ReaderHeaderBar: View {
                 .fill(PedefTheme.TextColor.tertiary.opacity(0.15))
                 .frame(height: 1)
         }
+        #if os(macOS)
         .background(WindowDragArea())
+        #endif
     }
 }
 
