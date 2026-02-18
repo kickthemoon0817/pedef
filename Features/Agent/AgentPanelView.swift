@@ -736,13 +736,11 @@ struct GeneralSettingsView: View {
                         .textSelection(.enabled)
                 }
 
+                #if os(macOS)
                 Button("Show in Finder") {
                     showDataInFinder()
                 }
-                #if os(macOS)
                 .buttonStyle(.link)
-                #else
-                .buttonStyle(.borderless)
                 #endif
             } header: {
                 Text("Storage")
@@ -762,6 +760,7 @@ struct GeneralSettingsView: View {
         return appSupport?.appendingPathComponent(bundleID).path ?? "Unknown"
     }
 
+    #if os(macOS)
     private func showDataInFinder() {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
         let bundleID = Bundle.main.bundleIdentifier ?? "com.pedef.app"
@@ -771,6 +770,7 @@ struct GeneralSettingsView: View {
             PlatformFileActions.revealInFileBrowser(url: url)
         }
     }
+    #endif
 }
 
 struct AgentSettingsView: View {
