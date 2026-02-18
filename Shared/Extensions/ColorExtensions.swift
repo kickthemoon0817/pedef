@@ -1,5 +1,11 @@
 import SwiftUI
 
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
+
 extension Color {
     /// Initialize a Color from a hex string (e.g., "#FF6B6B" or "FF6B6B")
     init?(hex: String) {
@@ -18,9 +24,15 @@ extension Color {
 
     /// Returns the hex representation of this color
     var hexString: String? {
+        #if os(macOS)
         guard let components = NSColor(self).cgColor.components, components.count >= 3 else {
             return nil
         }
+        #else
+        guard let components = UIColor(self).cgColor.components, components.count >= 3 else {
+            return nil
+        }
+        #endif
 
         let r = Int(components[0] * 255)
         let g = Int(components[1] * 255)

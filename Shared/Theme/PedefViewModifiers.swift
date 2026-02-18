@@ -1,8 +1,12 @@
 import SwiftUI
+
+#if os(macOS)
 import AppKit
+#endif
 
 // MARK: - Window Drag Area
 
+#if os(macOS)
 /// An invisible NSView-backed drag region that enables window dragging
 /// from custom header bars when using .windowStyle(.hiddenTitleBar).
 struct WindowDragArea: NSViewRepresentable {
@@ -20,6 +24,7 @@ private class WindowDragNSView: NSView {
         window?.performDrag(with: event)
     }
 }
+#endif
 
 // MARK: - Card Modifier
 
