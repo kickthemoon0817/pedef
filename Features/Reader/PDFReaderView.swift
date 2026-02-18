@@ -408,14 +408,14 @@ struct ThumbnailItem: View {
     let isSelected: Bool
     let onTap: () -> Void
 
-    @State private var thumbnail: NSImage?
+    @State private var thumbnail: PlatformImage?
 
     var body: some View {
         Button(action: onTap) {
             VStack(spacing: 4) {
                 Group {
                     if let thumb = thumbnail {
-                        Image(nsImage: thumb)
+                        Image(platformImage: thumb)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
                     } else {
@@ -451,6 +451,7 @@ struct ThumbnailItem: View {
 
 // MARK: - PDFKit Wrapper
 
+#if os(macOS)
 struct PDFKitView: NSViewRepresentable {
     @Binding var document: PDFDocument?
     @Binding var currentPage: Int
@@ -459,23 +460,59 @@ struct PDFKitView: NSViewRepresentable {
     var onPageChange: (Int) -> Void
 
     func makeNSView(context: Context) -> PDFView {
+        PDFKitViewHelper.configurePDFView(coordinator: context.coordinator)
+    }
+
+    func updateNSView(_ pdfView: PDFView, context: Context) {
+        PDFKitViewHelper.updatePDFView(pdfView, document: document, currentPage: currentPage, scale: scale)
+    }
+
+    func makeCoordinator() -> PDFKitViewCoordinator {
+        PDFKitViewCoordinator(self)
+    }
+}
+#else
+struct PDFKitView: UIViewRepresentable {
+    @Binding var document: PDFDocument?
+    @Binding var currentPage: Int
+    @Binding var scale: CGFloat
+    @Binding var selectedText: String?
+    var onPageChange: (Int) -> Void
+
+    func makeUIView(context: Context) -> PDFView {
+        PDFKitViewHelper.configurePDFView(coordinator: context.coordinator)
+    }
+
+    func updateUIView(_ pdfView: PDFView, context: Context) {
+        PDFKitViewHelper.updatePDFView(pdfView, document: document, currentPage: currentPage, scale: scale)
+    }
+
+    func makeCoordinator() -> PDFKitViewCoordinator {
+        PDFKitViewCoordinator(self)
+    }
+}
+#endif
+
+/// Shared setup and update logic for PDFKitView across platforms.
+private enum PDFKitViewHelper {
+    static func configurePDFView(coordinator: PDFKitViewCoordinator) -> PDFView {
         let pdfView = PDFView()
         pdfView.autoScales = true
         pdfView.displayMode = .singlePageContinuous
         pdfView.displayDirection = .vertical
-        pdfView.backgroundColor = NSColor(PedefTheme.Surface.primary)
-        pdfView.delegate = context.coordinator
+        pdfView.backgroundColor = PlatformColor(PedefTheme.Surface.primary)
+        pdfView.delegate = coordinator
 
         NotificationCenter.default.addObserver(
-            context.coordinator,
-            selector: #selector(Coordinator.pageChanged(_:)),
+            coordinator,
+            selector: #selector(PDFKitViewCoordinator.pageChanged(_:)),
             name: .PDFViewPageChanged,
             object: pdfView
         )
 
         NotificationCenter.default.addObserver(
-            context.coordinator,
-            selector: #selector(Coordinator.selectionChanged(_:)),
+            coordinator,
+            selector: #selector(PDFKitViewCoordinator.selectionChanged(_:)),
             name: .PDFViewSelectionChanged,
             object: pdfView
         )
@@ -483,7 +520,7 @@ struct PDFKitView: NSViewRepresentable {
         return pdfView
     }
 
-    func updateNSView(_ pdfView: PDFView, context: Context) {
+    static func updatePDFView(_ pdfView: PDFView, document: PDFDocument?, currentPage: Int, scale: CGFloat) {
         if pdfView.document !== document {
             pdfView.document = document
         }
@@ -496,36 +533,32 @@ struct PDFKitView: NSViewRepresentable {
 
         pdfView.scaleFactor = scale
     }
+}
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+class PDFKitViewCoordinator: NSObject, PDFViewDelegate {
+    var parent: PDFKitView
+
+    init(_ parent: PDFKitView) {
+        self.parent = parent
     }
 
-    class Coordinator: NSObject, PDFViewDelegate {
-        var parent: PDFKitView
-
-        init(_ parent: PDFKitView) {
-            self.parent = parent
+    @objc func pageChanged(_ notification: Notification) {
+        guard let pdfView = notification.object as? PDFView,
+              let currentPage = pdfView.currentPage,
+              let pageIndex = pdfView.document?.index(for: currentPage) else {
+            return
         }
-
-        @objc func pageChanged(_ notification: Notification) {
-            guard let pdfView = notification.object as? PDFView,
-                  let currentPage = pdfView.currentPage,
-                  let pageIndex = pdfView.document?.index(for: currentPage) else {
-                return
-            }
-            DispatchQueue.main.async {
-                if self.parent.currentPage != pageIndex {
-                    self.parent.onPageChange(pageIndex)
-                }
+        DispatchQueue.main.async {
+            if self.parent.currentPage != pageIndex {
+                self.parent.onPageChange(pageIndex)
             }
         }
+    }
 
-        @objc func selectionChanged(_ notification: Notification) {
-            guard let pdfView = notification.object as? PDFView else { return }
-            DispatchQueue.main.async {
-                self.parent.selectedText = pdfView.currentSelection?.string
-            }
+    @objc func selectionChanged(_ notification: Notification) {
+        guard let pdfView = notification.object as? PDFView else { return }
+        DispatchQueue.main.async {
+            self.parent.selectedText = pdfView.currentSelection?.string
         }
     }
 }
@@ -1064,8 +1097,7 @@ struct AnnotationRow: View {
 
             Button("Copy Text") {
                 if let text = annotation.selectedText {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(text, forType: .string)
+                    PlatformPasteboard.copy(text)
                 }
             }
             .disabled(annotation.selectedText?.isEmpty ?? true)
