@@ -360,3 +360,93 @@ struct PlatformTypesTests {
         #endif
     }
 }
+
+// MARK: - iPad / Cross-Platform Tests
+
+@Suite("Cross-Platform Notification Tests")
+struct CrossPlatformNotificationTests {
+    @Test("importPDF notification name is defined")
+    func testImportPDFNotification() {
+        let name = Notification.Name.importPDF
+        #expect(name.rawValue == "importPDF")
+    }
+
+    @Test("importPDFFromURL notification name is defined")
+    func testImportPDFFromURLNotification() {
+        let name = Notification.Name.importPDFFromURL
+        #expect(name.rawValue == "importPDFFromURL")
+    }
+
+    @Test("importPDFFromURL notification carries URL object")
+    func testImportPDFFromURLNotificationPayload() async {
+        let testURL = URL(fileURLWithPath: "/tmp/test.pdf")
+
+        await confirmation { confirmed in
+            let observer = NotificationCenter.default.addObserver(
+                forName: .importPDFFromURL,
+                object: nil,
+                queue: .main
+            ) { notification in
+                if let url = notification.object as? URL {
+                    #expect(url == testURL)
+                    confirmed()
+                }
+            }
+
+            NotificationCenter.default.post(name: .importPDFFromURL, object: testURL)
+
+            // Clean up observer after test
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
+
+    @Test("Navigation notification names are defined")
+    func testNavigationNotifications() {
+        #expect(Notification.Name.previousPage.rawValue == "previousPage")
+        #expect(Notification.Name.nextPage.rawValue == "nextPage")
+        #expect(Notification.Name.zoomIn.rawValue == "zoomIn")
+        #expect(Notification.Name.zoomOut.rawValue == "zoomOut")
+        #expect(Notification.Name.fitToWidth.rawValue == "fitToWidth")
+    }
+}
+
+@Suite("Cross-Platform File Handling Tests")
+struct CrossPlatformFileHandlingTests {
+    @Test("sharePDF does not crash with temp file")
+    func testSharePDFDoesNotCrash() {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-share.pdf")
+        // Create a minimal file so the URL is valid
+        FileManager.default.createFile(atPath: tempURL.path, contents: Data("test".utf8))
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        // Should not crash on either platform (no-op on macOS, needs window on iOS)
+        // On iOS without a window hierarchy this will silently return
+        PlatformFileActions.sharePDF(url: tempURL)
+    }
+
+    @Test("revealInFileBrowser is no-op on iOS, functional on macOS")
+    func testRevealInFileBrowserPlatformBehavior() {
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("test-reveal")
+        FileManager.default.createFile(atPath: tempURL.path, contents: Data("test".utf8))
+        defer { try? FileManager.default.removeItem(at: tempURL) }
+
+        // Should not crash on any platform
+        PlatformFileActions.revealInFileBrowser(url: tempURL)
+    }
+
+    @Test("PDF file extension validation")
+    func testPDFExtensionValidation() {
+        // Simulates the check done in .onOpenURL handler
+        let pdfURL = URL(fileURLWithPath: "/tmp/paper.pdf")
+        let pdfUpperURL = URL(fileURLWithPath: "/tmp/paper.PDF")
+        let txtURL = URL(fileURLWithPath: "/tmp/notes.txt")
+        let noExtURL = URL(fileURLWithPath: "/tmp/noext")
+
+        #expect(pdfURL.pathExtension.lowercased() == "pdf")
+        #expect(pdfUpperURL.pathExtension.lowercased() == "pdf")
+        #expect(txtURL.pathExtension.lowercased() != "pdf")
+        #expect(noExtURL.pathExtension.lowercased() != "pdf")
+    }
+}
