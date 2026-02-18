@@ -292,7 +292,9 @@ struct ReaderHeaderBar: View {
                 } primaryAction: {
                     NotificationCenter.default.post(name: .highlightSelection, object: nil)
                 }
+                #if os(macOS)
                 .menuStyle(.borderlessButton)
+                #endif
                 .fixedSize()
                 .help("Highlight (⌘H)")
 
@@ -665,7 +667,9 @@ struct ReaderBottomToolbar: View {
                     Image(systemName: "chevron.down")
                         .font(.caption2)
                 }
+                #if os(macOS)
                 .menuStyle(.borderlessButton)
+                #endif
                 .frame(width: 16)
                 .help("Zoom Presets")
             }
@@ -923,7 +927,9 @@ struct AnnotationSidebarView: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(filterType != nil ? PedefTheme.Brand.indigo : PedefTheme.TextColor.tertiary)
                 }
+                #if os(macOS)
                 .menuStyle(.borderlessButton)
+                #endif
                 .fixedSize()
             }
             .padding(.horizontal, PedefTheme.Spacing.lg)
