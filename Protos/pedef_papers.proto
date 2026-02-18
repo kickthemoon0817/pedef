@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package pedef;
+
+import "pedef_models.proto";
+
+// PaperService handles individual paper CRUD and PDF binary transfer.
+// PDF uploads use client streaming (64KB chunks).
+// PDF downloads use server streaming (64KB chunks).
+service PaperService {
+  // Get a single paper's metadata
+  rpc GetPaper(GetPaperRequest) returns (GetPaperResponse);
+
+  // List all papers (metadata only)
+  rpc ListPapers(ListPapersRequest) returns (ListPapersResponse);
+
+  // Create or update a paper's metadata
+  rpc UpsertPaper(UpsertPaperRequest) returns (UpsertPaperResponse);
+
+  // Soft-delete a paper
+  rpc DeletePaper(DeletePaperRequest) returns (DeletePaperResponse);
+
+  // Upload a PDF file (client streaming: first message = metadata, rest = chunks)
+  rpc UploadPDF(stream UploadPDFRequest) returns (UploadPDFResponse);
+
+  // Download a PDF file (server streaming: first message = metadata, rest = chunks)
+  rpc DownloadPDF(DownloadPDFRequest) returns (stream DownloadPDFResponse);
+}
+
+// --- GetPaper ---
+
+message GetPaperRequest {
+  string paper_id = 1;  // UUID
+}
+
+message GetPaperResponse {
+  PaperMetadata paper = 1;
+}
+
+// --- ListPapers ---
+
+message ListPapersRequest {
+  // Optional: filter papers modified after this offset (pagination).
+  // If unset, returns all non-deleted papers.
+  int32 offset = 1;
+  int32 limit = 2;  // 0 = no limit
+}
+
+message ListPapersResponse {
+  repeated PaperMetadata papers = 1;
+  int32 total_count = 2;
+}
+
+// --- UpsertPaper ---
+
+message UpsertPaperRequest {
+  PaperMetadata paper = 1;
+}
+
+message UpsertPaperResponse {
+  bool created = 1;    // true if new, false if updated
+  PaperMetadata paper = 2;
+}
+
+// --- DeletePaper ---
+
+message DeletePaperRequest {
+  string paper_id = 1;       // UUID
+  bool hard_delete = 2;      // true = remove from DB + filesystem; false = soft delete
+}
+
+message DeletePaperResponse {
+  bool success = 1;
+}
+
+// --- UploadPDF ---
+
+message UploadPDFRequest {
+  oneof payload {
+    UploadPDFMetadata metadata = 1;  // First message: paper ID + file info
+    bytes chunk_data = 2;            // Subsequent messages: 64KB PDF chunks
+  }
+}
+
+message UploadPDFMetadata {
+  string paper_id = 1;       // UUID
+  int64 total_size = 2;      // expected file size in bytes
+  string sha256_hash = 3;    // for integrity verification
+}
+
+message UploadPDFResponse {
+  bool success = 1;
+  int64 bytes_received = 2;
+  string sha256_hash = 3;    // server-computed hash for verification
+}
+
+// --- DownloadPDF ---
+
+message DownloadPDFRequest {
+  string paper_id = 1;       // UUID
+}
+
+message DownloadPDFResponse {
+  oneof payload {
+    DownloadPDFMetadata metadata = 1;  // First message: file info
+    bytes chunk_data = 2;              // Subsequent messages: 64KB PDF chunks
+  }
+}
+
+message DownloadPDFMetadata {
+  string paper_id = 1;
+  int64 total_size = 2;
+  string sha256_hash = 3;
+}
+
