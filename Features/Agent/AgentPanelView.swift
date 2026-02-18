@@ -764,7 +764,7 @@ struct GeneralSettingsView: View {
         if let url = appSupport?.appendingPathComponent(bundleID) {
             // Create directory if it doesn't exist
             try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: url.path)
+            PlatformFileActions.revealInFileBrowser(url: url)
         }
     }
 }
