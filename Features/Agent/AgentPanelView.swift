@@ -680,8 +680,13 @@ struct SettingsView: View {
                 .tabItem {
                     Label("Shortcuts", systemImage: "keyboard")
                 }
+
+            SyncSettingsView()
+                .tabItem {
+                    Label("Sync", systemImage: "arrow.triangle.2.circlepath")
+                }
         }
-        .frame(width: 500, height: 350)
+        .frame(width: 500, height: 450)
     }
 }
 
@@ -988,6 +993,171 @@ struct ShortcutsSettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
+    }
+}
+
+struct SyncSettingsView: View {
+    @AppStorage("syncEnabled") private var syncEnabled = false
+    @AppStorage("syncHost") private var syncHost = "localhost"
+    @AppStorage("syncPort") private var syncPort = 50051
+    @AppStorage("syncUseTLS") private var syncUseTLS = false
+    @AppStorage("syncAutoInterval") private var syncAutoInterval = 300
+
+    @StateObject private var keychainService = KeychainService.shared
+    @State private var authTokenInput = ""
+    @State private var showAuthToken = false
+    @State private var isTesting = false
+    @State private var testResult: String?
+    @State private var saveMessage: String?
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Enable Sync", isOn: $syncEnabled)
+            } header: {
+                Text("Sync")
+            }
+
+            Section {
+                TextField("Host", text: $syncHost)
+                    .textFieldStyle(.roundedBorder)
+
+                TextField("Port", value: $syncPort, format: .number)
+                    .textFieldStyle(.roundedBorder)
+
+                Toggle("Use TLS", isOn: $syncUseTLS)
+
+                Picker("Auto-sync interval", selection: $syncAutoInterval) {
+                    Text("1 minute").tag(60)
+                    Text("5 minutes").tag(300)
+                    Text("15 minutes").tag(900)
+                    Text("30 minutes").tag(1800)
+                    Text("Manual only").tag(0)
+                }
+            } header: {
+                Text("Server")
+            }
+
+            Section {
+                HStack {
+                    if showAuthToken {
+                        TextField("Auth Token", text: $authTokenInput)
+                            .textFieldStyle(.roundedBorder)
+                    } else {
+                        SecureField("Auth Token", text: $authTokenInput)
+                            .textFieldStyle(.roundedBorder)
+                    }
+
+                    Button {
+                        showAuthToken.toggle()
+                    } label: {
+                        Image(systemName: showAuthToken ? "eye.slash" : "eye")
+                    }
+                    .buttonStyle(.borderless)
+                }
+
+                HStack {
+                    Button("Save Token") {
+                        saveAuthToken()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(authTokenInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    if keychainService.hasSyncAuthToken {
+                        Button("Clear Token", role: .destructive) {
+                            keychainService.clearSyncAuthToken()
+                            authTokenInput = ""
+                            saveMessage = "Token cleared"
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 3) { saveMessage = nil }
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+
+                if let message = saveMessage {
+                    Text(message)
+                        .font(PedefTheme.Typography.caption)
+                        .foregroundStyle(message.contains("Error") ? PedefTheme.Semantic.error : PedefTheme.Semantic.success)
+                }
+
+                Text("Token is stored securely in the system Keychain.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            } header: {
+                Text("Authentication")
+            }
+
+            Section {
+                Button {
+                    testConnection()
+                } label: {
+                    HStack {
+                        if isTesting {
+                            ProgressView()
+                                .controlSize(.small)
+                        }
+                        Text(isTesting ? "Testing..." : "Test Connection")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(isTesting)
+
+                if let result = testResult {
+                    Text(result)
+                        .font(PedefTheme.Typography.caption)
+                        .foregroundStyle(result.contains("Success") ? PedefTheme.Semantic.success : PedefTheme.Semantic.error)
+                }
+            } header: {
+                Text("Connection")
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+        .onAppear {
+            if keychainService.hasSyncAuthToken {
+                authTokenInput = ""
+            }
+        }
+    }
+
+    private func saveAuthToken() {
+        let trimmed = authTokenInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            saveMessage = "Error: Please enter an auth token"
+            return
+        }
+        keychainService.syncAuthToken = trimmed
+        authTokenInput = ""
+        saveMessage = "Token saved securely"
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { saveMessage = nil }
+    }
+
+    private func testConnection() {
+        isTesting = true
+        testResult = nil
+
+        let config = SyncServerConfig(
+            host: syncHost,
+            port: syncPort,
+            authToken: keychainService.syncAuthToken ?? "",
+            useTLS: syncUseTLS
+        )
+
+        Task {
+            if #available(macOS 15.0, iOS 18.0, *) {
+                do {
+                    let client = try SyncNetworkClient(config: config)
+                    let status = try await client.status()
+                    client.close()
+                    testResult = "Success: v\(status.serverVersion) (\(status.paperCount) papers)"
+                } catch {
+                    testResult = "Error: \(error.localizedDescription)"
+                }
+            } else {
+                testResult = "Error: Sync requires macOS 15.0 or later"
+            }
+            isTesting = false
+        }
     }
 }
 
