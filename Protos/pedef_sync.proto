@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package pedef;
+
+import "google/protobuf/timestamp.proto";
+import "pedef_models.proto";
+
+// SyncService handles delta synchronization between devices.
+// Pull fetches changes since a given timestamp.
+// Push sends local changes to the server.
+// Status returns server health and sync state.
+service SyncService {
+  // Pull all changes since the given timestamp
+  rpc Pull(PullRequest) returns (PullResponse);
+
+  // Push local changes to the server
+  rpc Push(PushRequest) returns (PushResponse);
+
+  // Get server status and sync summary
+  rpc Status(StatusRequest) returns (StatusResponse);
+}
+
+// --- Pull ---
+
+message PullRequest {
+  // Fetch entities modified after this timestamp.
+  // If unset, returns all entities (full sync).
+  google.protobuf.Timestamp since = 1;
+}
+
+message PullResponse {
+  repeated PaperMetadata papers = 1;
+  repeated AnnotationDTO annotations = 2;
+  repeated CollectionDTO collections = 3;
+  repeated TagDTO tags = 4;
+  Deletions deletions = 5;
+
+  // Server time when this response was generated.
+  // Client should store this and use it as `since` in the next pull.
+  google.protobuf.Timestamp server_timestamp = 6;
+}
+
+// --- Push ---
+
+message PushRequest {
+  repeated PaperMetadata papers = 1;
+  repeated AnnotationDTO annotations = 2;
+  repeated CollectionDTO collections = 3;
+  repeated TagDTO tags = 4;
+  Deletions deletions = 5;
+}
+
+// Conflict detail for push responses
+message ConflictDetail {
+  string entity_type = 1;  // "paper", "annotation", "collection", "tag"
+  string entity_id = 2;    // UUID
+  string resolution = 3;   // "server_wins" or "client_wins"
+  string reason = 4;       // human-readable reason
+}
+
+message PushResponse {
+  bool success = 1;
+  repeated ConflictDetail conflicts = 2;
+
+  // Server time when the push was processed.
+  google.protobuf.Timestamp server_timestamp = 3;
+}
+
+// --- Status ---
+
+message StatusRequest {}
+
+message StatusResponse {
+  string server_version = 1;
+  int64 paper_count = 2;
+  int64 annotation_count = 3;
+  int64 collection_count = 4;
+  int64 tag_count = 5;
+  google.protobuf.Timestamp last_modified = 6;
+  int64 storage_bytes_used = 7;  // total PDF storage
+}
+
