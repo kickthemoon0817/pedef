@@ -58,6 +58,11 @@ struct PedefApp: App {
                     tagService.configure(with: sharedModelContainer.mainContext)
                     historyService.setModelContext(sharedModelContainer.mainContext)
                 }
+                .onOpenURL { url in
+                    // Handle PDFs opened from Files.app (iPad) or Finder (macOS)
+                    guard url.pathExtension.lowercased() == "pdf" else { return }
+                    NotificationCenter.default.post(name: .importPDFFromURL, object: url)
+                }
         }
         .modelContainer(sharedModelContainer)
         #if os(macOS)
@@ -198,6 +203,7 @@ struct PedefCommands: Commands {
 
 extension Notification.Name {
     static let importPDF = Notification.Name("importPDF")
+    static let importPDFFromURL = Notification.Name("importPDFFromURL")
     static let previousPage = Notification.Name("previousPage")
     static let nextPage = Notification.Name("nextPage")
     static let zoomIn = Notification.Name("zoomIn")
