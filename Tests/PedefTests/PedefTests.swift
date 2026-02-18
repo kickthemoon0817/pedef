@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import CoreGraphics
+import SwiftUI
 @testable import Pedef
 
 @Suite("Paper Model Tests")
@@ -268,5 +269,94 @@ struct ArchiveStatisticsTests {
             totalFileSizeBytes: 0, uniqueAuthors: 0, uniqueKeywords: 0
         )
         #expect(fullProgress.readingProgress == 1.0)
+    }
+}
+
+
+// MARK: - Platform Abstraction Tests
+
+@Suite("Platform Types Tests")
+struct PlatformTypesTests {
+    @Test("PlatformImage initializes from data")
+    func testPlatformImageFromData() {
+        // Create a minimal 1x1 PNG
+        let pngData = createMinimalPNGData()
+        let image = PlatformImage(data: pngData)
+        #expect(image != nil)
+    }
+
+    @Test("PlatformImage returns nil for invalid data")
+    func testPlatformImageInvalidData() {
+        let badData = Data("not an image".utf8)
+        let image = PlatformImage(data: badData)
+        #expect(image == nil)
+    }
+
+    @Test("PlatformColor initializes from SwiftUI Color")
+    func testPlatformColorFromSwiftUI() {
+        let color = PlatformColor(Color.red)
+        #expect(color != nil)
+    }
+
+    @Test("Image(platformImage:) creates SwiftUI Image")
+    func testImageFromPlatformImage() {
+        let pngData = createMinimalPNGData()
+        guard let platformImage = PlatformImage(data: pngData) else {
+            Issue.record("Failed to create PlatformImage from valid PNG data")
+            return
+        }
+        // This should compile and not crash — verifying the extension works
+        let _ = Image(platformImage: platformImage)
+    }
+
+    @Test("Color.adaptive creates a color")
+    func testAdaptiveColor() {
+        let color = Color.adaptive(light: .white, dark: .black)
+        // Verify it produces a valid Color (not nil or crash)
+        #expect(type(of: color) == Color.self)
+    }
+
+    @Test("PlatformPasteboard.copy does not crash")
+    func testPlatformPasteboardCopy() {
+        // Should not crash on any platform
+        PlatformPasteboard.copy("test string")
+    }
+
+    @Test("PlatformFileActions.revealInFileBrowser does not crash with temp URL")
+    func testRevealInFileBrowser() {
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("test-file")
+        // Should not crash even if file doesn't exist
+        PlatformFileActions.revealInFileBrowser(url: tempURL)
+    }
+
+    @Test("PlatformFileActions.openDirectory does not crash with temp URL")
+    func testOpenDirectory() {
+        let tempURL = FileManager.default.temporaryDirectory
+        PlatformFileActions.openDirectory(url: tempURL)
+    }
+
+    // MARK: - Helpers
+
+    /// Creates minimal valid 1x1 white PNG data for testing.
+    private func createMinimalPNGData() -> Data {
+        #if os(macOS)
+        let image = NSImage(size: NSSize(width: 1, height: 1))
+        image.lockFocus()
+        NSColor.white.set()
+        NSBezierPath.fill(NSRect(x: 0, y: 0, width: 1, height: 1))
+        image.unlockFocus()
+        guard let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return Data()
+        }
+        return pngData
+        #else
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1))
+        return renderer.pngData { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 1, height: 1))
+        }
+        #endif
     }
 }
