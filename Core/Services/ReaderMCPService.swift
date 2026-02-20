@@ -118,7 +118,8 @@ final class ReaderMCPService {
 
     func updateCurrentPage(sessionID: UUID, currentPage: Int) {
         guard var session = sessions[sessionID] else { return }
-        session.currentPage = max(currentPage, 0)
+        let upperBound = max(session.pageCount - 1, 0)
+        session.currentPage = min(max(currentPage, 0), upperBound)
         session.updatedAt = Date()
         sessions[sessionID] = session
         _ = writeBridgeSnapshot()
@@ -215,15 +216,14 @@ final class ReaderMCPService {
         guard let (session, paper) = sessionAndPaper(for: sessionID) else { return nil }
         guard let document = sessionDocuments[sessionID],
               pageIndex >= 0, pageIndex < session.pageCount,
-              let page = document.page(at: pageIndex) else {
+              let pageText = PDFService.shared.extractText(from: document, pageIndex: pageIndex),
+              !pageText.isEmpty else {
             return nil
         }
 
-        guard let pageText = page.string, !pageText.isEmpty else { return nil }
-
         touch(sessionID: session.id, currentPage: pageIndex)
 
-        let spans = PDFService.shared.extractTextSpans(from: paper.pdfData, pageIndex: pageIndex)
+        let spans = PDFService.shared.extractTextSpans(from: document, pageIndex: pageIndex)
         let source = ReaderMCPSourceReference(
             paperID: paper.id,
             paperTitle: paper.title,
@@ -236,12 +236,13 @@ final class ReaderMCPService {
     }
 
     func getText(sessionID: UUID, pageRange: Range<Int>) -> ReaderMCPTextPayload? {
-        guard let (session, paper) = sessionAndPaper(for: sessionID) else { return nil }
+        guard let (session, paper) = sessionAndPaper(for: sessionID),
+              let document = sessionDocuments[sessionID] else { return nil }
 
         let validRange = pageRange.clamped(to: 0..<max(session.pageCount, 0))
         guard !validRange.isEmpty else { return nil }
 
-        guard let text = PDFService.shared.extractText(from: paper.pdfData, pageRange: validRange) else { return nil }
+        guard let text = PDFService.shared.extractText(from: document, pageRange: validRange) else { return nil }
 
         let endPage = validRange.upperBound - 1
         touch(sessionID: session.id, currentPage: endPage)
@@ -249,7 +250,7 @@ final class ReaderMCPService {
         var spans: [PDFTextSpan] = []
         var sources: [ReaderMCPSourceReference] = []
         for pageIndex in validRange {
-            spans.append(contentsOf: PDFService.shared.extractTextSpans(from: paper.pdfData, pageIndex: pageIndex))
+            spans.append(contentsOf: PDFService.shared.extractTextSpans(from: document, pageIndex: pageIndex))
             sources.append(
                 ReaderMCPSourceReference(
                     paperID: paper.id,
@@ -442,7 +443,8 @@ final class ReaderMCPService {
     private func touch(sessionID: UUID, currentPage: Int? = nil) {
         guard var session = sessions[sessionID] else { return }
         if let currentPage {
-            session.currentPage = max(currentPage, 0)
+            let upperBound = max(session.pageCount - 1, 0)
+            session.currentPage = min(max(currentPage, 0), upperBound)
         }
         session.updatedAt = Date()
         sessions[sessionID] = session

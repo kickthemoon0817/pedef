@@ -45,19 +45,26 @@ final class PDFService {
 
     /// Extract text from a specific page
     func extractText(from data: Data, pageIndex: Int) -> String? {
-        guard let document = PDFDocument(data: data),
-              let page = document.page(at: pageIndex) else {
-            return nil
-        }
+        guard let document = PDFDocument(data: data) else { return nil }
+        return extractText(from: document, pageIndex: pageIndex)
+    }
+
+    /// Extract text from a specific page using an already parsed document.
+    func extractText(from document: PDFDocument, pageIndex: Int) -> String? {
+        guard let page = document.page(at: pageIndex) else { return nil }
         return page.string
     }
 
     /// Extract text from a range of pages
     func extractText(from data: Data, pageRange: Range<Int>) -> String? {
         guard let document = PDFDocument(data: data) else { return nil }
+        return extractText(from: document, pageRange: pageRange)
+    }
 
+    /// Extract text from a range of pages using an already parsed document.
+    func extractText(from document: PDFDocument, pageRange: Range<Int>) -> String? {
         var text = ""
-        for pageIndex in pageRange where pageIndex < document.pageCount {
+        for pageIndex in pageRange where pageIndex >= 0 && pageIndex < document.pageCount {
             if let page = document.page(at: pageIndex), let pageText = page.string {
                 text += pageText
                 text += "\n\n"
@@ -68,10 +75,13 @@ final class PDFService {
 
     /// Extract line-level text spans from a specific page with absolute and normalized bounds.
     func extractTextSpans(from data: Data, pageIndex: Int) -> [PDFTextSpan] {
-        guard let document = PDFDocument(data: data),
-              let page = document.page(at: pageIndex) else {
-            return []
-        }
+        guard let document = PDFDocument(data: data) else { return [] }
+        return extractTextSpans(from: document, pageIndex: pageIndex)
+    }
+
+    /// Extract line-level text spans from a specific page using an already parsed document.
+    func extractTextSpans(from document: PDFDocument, pageIndex: Int) -> [PDFTextSpan] {
+        guard let page = document.page(at: pageIndex) else { return [] }
 
         let pageBounds = page.bounds(for: .mediaBox)
         guard let selection = page.selection(for: pageBounds) else { return [] }
