@@ -272,8 +272,10 @@ final class ReaderMCPService {
         appearance: PDFCaptureAppearance = .system
     ) -> ReaderMCPImagePayload? {
         guard let (session, paper) = sessionAndPaper(for: sessionID),
+              pageIndex >= 0, pageIndex < session.pageCount,
+              let document = sessionDocuments[sessionID],
               let capture = PDFService.shared.captureRegion(
-                from: paper.pdfData,
+                from: document,
                 pageIndex: pageIndex,
                 rect: rect,
                 options: PDFCaptureOptions(scale: 2.0, appearance: appearance)
@@ -306,8 +308,10 @@ final class ReaderMCPService {
         appearance: PDFCaptureAppearance = .system
     ) -> ReaderMCPImagePayload? {
         guard let (session, paper) = sessionAndPaper(for: sessionID),
+              pageIndex >= 0, pageIndex < session.pageCount,
+              let document = sessionDocuments[sessionID],
               let capture = PDFService.shared.capturePage(
-                from: paper.pdfData,
+                from: document,
                 pageIndex: pageIndex,
                 options: PDFCaptureOptions(scale: 1.5, appearance: appearance)
               ) else {
@@ -339,19 +343,21 @@ final class ReaderMCPService {
         rect: CGRect?,
         appearance: PDFCaptureAppearance = .system
     ) -> ReaderMCPCaptionPayload? {
-        guard let (session, paper) = sessionAndPaper(for: sessionID) else { return nil }
+        guard let (session, paper) = sessionAndPaper(for: sessionID),
+              pageIndex >= 0, pageIndex < session.pageCount,
+              let document = sessionDocuments[sessionID] else { return nil }
 
         let capture: PDFCaptureResult?
         if let rect, !rect.isNull, !rect.isEmpty {
             capture = PDFService.shared.captureRegion(
-                from: paper.pdfData,
+                from: document,
                 pageIndex: pageIndex,
                 rect: rect,
                 options: PDFCaptureOptions(scale: 2.0, appearance: appearance)
             )
         } else {
             capture = PDFService.shared.capturePage(
-                from: paper.pdfData,
+                from: document,
                 pageIndex: pageIndex,
                 options: PDFCaptureOptions(scale: 1.5, appearance: appearance)
             )
@@ -361,7 +367,7 @@ final class ReaderMCPService {
 
         touch(sessionID: session.id, currentPage: pageIndex)
 
-        let pageContext = PDFService.shared.extractText(from: paper.pdfData, pageIndex: pageIndex)
+        let pageContext = PDFService.shared.extractText(from: document, pageIndex: pageIndex)
         let caption = PDFCaptionService.shared.caption(for: capture, pageContext: pageContext)
         let source = ReaderMCPSourceReference(
             paperID: paper.id,
