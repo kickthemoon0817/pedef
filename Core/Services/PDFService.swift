@@ -3,6 +3,7 @@ import PDFKit
 
 #if os(macOS)
 import AppKit
+import CoreImage
 #else
 import UIKit
 #endif
@@ -11,7 +12,17 @@ import UIKit
 final class PDFService {
     static let shared = PDFService()
 
+    private let ciContext = CIContext()
+
     private init() {}
+
+    // MARK: - Document Access
+
+    /// Create a PDFDocument from raw data. Callers that need multiple operations
+    /// on the same document should parse once and reuse the result.
+    func pdfDocument(from data: Data) -> PDFDocument? {
+        PDFDocument(data: data)
+    }
 
     // MARK: - Text Extraction
 
@@ -39,25 +50,243 @@ final class PDFService {
 
     /// Extract text from a specific page
     func extractText(from data: Data, pageIndex: Int) -> String? {
-        guard let document = PDFDocument(data: data),
-              let page = document.page(at: pageIndex) else {
-            return nil
-        }
+        guard let document = PDFDocument(data: data) else { return nil }
+        return extractText(from: document, pageIndex: pageIndex)
+    }
+
+    /// Extract text from a specific page using an already parsed document.
+    func extractText(from document: PDFDocument, pageIndex: Int) -> String? {
+        guard let page = document.page(at: pageIndex) else { return nil }
         return page.string
     }
 
     /// Extract text from a range of pages
     func extractText(from data: Data, pageRange: Range<Int>) -> String? {
         guard let document = PDFDocument(data: data) else { return nil }
+        return extractText(from: document, pageRange: pageRange)
+    }
 
+    /// Extract text from a range of pages using an already parsed document.
+    func extractText(from document: PDFDocument, pageRange: Range<Int>) -> String? {
         var text = ""
-        for pageIndex in pageRange where pageIndex < document.pageCount {
+        for pageIndex in pageRange where pageIndex >= 0 && pageIndex < document.pageCount {
             if let page = document.page(at: pageIndex), let pageText = page.string {
                 text += pageText
                 text += "\n\n"
             }
         }
         return text.isEmpty ? nil : text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Extract line-level text spans from a specific page with absolute and normalized bounds.
+    func extractTextSpans(from data: Data, pageIndex: Int) -> [PDFTextSpan] {
+        guard let document = PDFDocument(data: data) else { return [] }
+        return extractTextSpans(from: document, pageIndex: pageIndex)
+    }
+
+    /// Extract line-level text spans from a specific page using an already parsed document.
+    func extractTextSpans(from document: PDFDocument, pageIndex: Int) -> [PDFTextSpan] {
+        guard let page = document.page(at: pageIndex) else { return [] }
+
+        let pageBounds = page.bounds(for: .mediaBox)
+        guard let selection = page.selection(for: pageBounds) else { return [] }
+
+        return selection.selectionsByLine().compactMap { lineSelection in
+            guard let text = lineSelection.string?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else {
+                return nil
+            }
+
+            let bounds = lineSelection.bounds(for: page).standardized
+            let normalizedBounds = CGRect(
+                x: pageBounds.width > 0 ? bounds.minX / pageBounds.width : 0,
+                y: pageBounds.height > 0 ? bounds.minY / pageBounds.height : 0,
+                width: pageBounds.width > 0 ? bounds.width / pageBounds.width : 0,
+                height: pageBounds.height > 0 ? bounds.height / pageBounds.height : 0
+            )
+
+            return PDFTextSpan(
+                pageIndex: pageIndex,
+                text: text,
+                bounds: bounds,
+                normalizedBounds: normalizedBounds
+            )
+        }
+    }
+
+    // MARK: - Internal Capture
+
+    /// Capture an entire page as PNG data, rendered from internal PDF vectors.
+    @MainActor
+    func capturePage(
+        from data: Data,
+        pageIndex: Int,
+        options: PDFCaptureOptions = PDFCaptureOptions()
+    ) -> PDFCaptureResult? {
+        guard let document = PDFDocument(data: data) else { return nil }
+        return capturePage(from: document, pageIndex: pageIndex, options: options)
+    }
+
+    /// Capture an entire page as PNG data using an already parsed document.
+    @MainActor
+    func capturePage(
+        from document: PDFDocument,
+        pageIndex: Int,
+        options: PDFCaptureOptions = PDFCaptureOptions()
+    ) -> PDFCaptureResult? {
+        guard let page = document.page(at: pageIndex) else { return nil }
+
+        let appearance = Self.resolveAppearance(options.appearance)
+        let pageBounds = page.bounds(for: .mediaBox)
+        return captureRegion(page: page, pageIndex: pageIndex, rect: pageBounds, options: options, resolvedAppearance: appearance)
+    }
+
+    /// Capture a rectangular region from a page as PNG data.
+    @MainActor
+    func captureRegion(
+        from data: Data,
+        pageIndex: Int,
+        rect: CGRect,
+        options: PDFCaptureOptions = PDFCaptureOptions()
+    ) -> PDFCaptureResult? {
+        guard let document = PDFDocument(data: data) else { return nil }
+        return captureRegion(from: document, pageIndex: pageIndex, rect: rect, options: options)
+    }
+
+    /// Capture a rectangular region from a page using an already parsed document.
+    @MainActor
+    func captureRegion(
+        from document: PDFDocument,
+        pageIndex: Int,
+        rect: CGRect,
+        options: PDFCaptureOptions = PDFCaptureOptions()
+    ) -> PDFCaptureResult? {
+        guard let page = document.page(at: pageIndex) else { return nil }
+
+        let appearance = Self.resolveAppearance(options.appearance)
+        return captureRegion(page: page, pageIndex: pageIndex, rect: rect, options: options, resolvedAppearance: appearance)
+    }
+
+    private func captureRegion(
+        page: PDFPage,
+        pageIndex: Int,
+        rect: CGRect,
+        options: PDFCaptureOptions,
+        resolvedAppearance: PDFCaptureAppearance
+    ) -> PDFCaptureResult? {
+        let pageBounds = page.bounds(for: .mediaBox)
+        let requestedBounds = (rect.isNull || rect.isEmpty) ? pageBounds : rect
+        let clippedBounds = requestedBounds.standardized.intersection(pageBounds)
+
+        guard !clippedBounds.isNull, !clippedBounds.isEmpty else { return nil }
+
+        let scale = max(options.scale, 0.25)
+
+        guard let imageData = renderRegion(
+            page: page,
+            region: clippedBounds,
+            scale: scale,
+            appearance: resolvedAppearance
+        ) else {
+            return nil
+        }
+
+        let extractedText = page.selection(for: clippedBounds)?
+            .string?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let imageSize = CGSize(
+            width: clippedBounds.width * scale,
+            height: clippedBounds.height * scale
+        )
+
+        return PDFCaptureResult(
+            pageIndex: pageIndex,
+            requestedBounds: requestedBounds,
+            actualBounds: clippedBounds,
+            imageData: imageData,
+            imageSize: imageSize,
+            scale: scale,
+            appearance: resolvedAppearance,
+            extractedText: extractedText?.isEmpty == false ? extractedText : nil
+        )
+    }
+
+    private func renderRegion(
+        page: PDFPage,
+        region: CGRect,
+        scale: CGFloat,
+        appearance: PDFCaptureAppearance
+    ) -> Data? {
+        let width = max(Int(ceil(region.width * scale)), 1)
+        let height = max(Int(ceil(region.height * scale)), 1)
+
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else {
+            return nil
+        }
+
+        context.interpolationQuality = .high
+        context.setShouldAntialias(true)
+        context.setFillColor(NSColor.white.cgColor)
+        context.fill(CGRect(x: 0, y: 0, width: CGFloat(width), height: CGFloat(height)))
+
+        context.saveGState()
+        context.scaleBy(x: scale, y: scale)
+        context.translateBy(x: -region.minX, y: -region.minY)
+        page.draw(with: .mediaBox, to: context)
+        context.restoreGState()
+
+        guard let baseImage = context.makeImage() else { return nil }
+
+        let outputImage: CGImage
+        if appearance == .dark, let darkImage = applyDarkAppearance(to: baseImage) {
+            outputImage = darkImage
+        } else {
+            outputImage = baseImage
+        }
+
+        let rep = NSBitmapImageRep(cgImage: outputImage)
+        return rep.representation(using: .png, properties: [:])
+    }
+
+    @MainActor
+    static func resolveAppearance(_ appearance: PDFCaptureAppearance) -> PDFCaptureAppearance {
+        switch appearance {
+        case .light, .dark:
+            return appearance
+        case .system:
+            guard let app = NSApp else { return .light }
+            let best = app.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua])
+            return best == .darkAqua ? .dark : .light
+        }
+    }
+
+    private func applyDarkAppearance(to image: CGImage) -> CGImage? {
+        let ciImage = CIImage(cgImage: image)
+
+        guard let invert = CIFilter(name: "CIColorInvert") else { return nil }
+        invert.setValue(ciImage, forKey: kCIInputImageKey)
+
+        guard let inverted = invert.outputImage,
+              let controls = CIFilter(name: "CIColorControls") else {
+            return nil
+        }
+
+        controls.setValue(inverted, forKey: kCIInputImageKey)
+        controls.setValue(1.0, forKey: kCIInputSaturationKey)
+        controls.setValue(-0.02, forKey: kCIInputBrightnessKey)
+        controls.setValue(1.08, forKey: kCIInputContrastKey)
+
+        let output = controls.outputImage ?? inverted
+        return ciContext.createCGImage(output, from: output.extent)
     }
 
     // MARK: - Metadata Extraction
@@ -250,3 +479,36 @@ struct PDFSearchResult {
     let bounds: CGRect
 }
 
+enum PDFCaptureAppearance: String, Codable, CaseIterable {
+    case system
+    case light
+    case dark
+}
+
+struct PDFCaptureOptions {
+    let scale: CGFloat
+    let appearance: PDFCaptureAppearance
+
+    init(scale: CGFloat = 2.0, appearance: PDFCaptureAppearance = .system) {
+        self.scale = scale
+        self.appearance = appearance
+    }
+}
+
+struct PDFTextSpan {
+    let pageIndex: Int
+    let text: String
+    let bounds: CGRect
+    let normalizedBounds: CGRect
+}
+
+struct PDFCaptureResult {
+    let pageIndex: Int
+    let requestedBounds: CGRect
+    let actualBounds: CGRect
+    let imageData: Data
+    let imageSize: CGSize
+    let scale: CGFloat
+    let appearance: PDFCaptureAppearance
+    let extractedText: String?
+}
