@@ -1,7 +1,12 @@
 import Foundation
 import PDFKit
+
+#if os(macOS)
 import AppKit
 import CoreImage
+#else
+import UIKit
+#endif
 
 /// Service for PDF parsing, text extraction, and thumbnail generation
 final class PDFService {
@@ -371,15 +376,13 @@ final class PDFService {
             height: pageRect.height * scale
         )
 
+        #if os(macOS)
         let image = NSImage(size: scaledSize)
         image.lockFocus()
 
         if let context = NSGraphicsContext.current?.cgContext {
-            // White background
-            context.setFillColor(NSColor.white.cgColor)
+            context.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
             context.fill(CGRect(origin: .zero, size: scaledSize))
-
-            // Scale and draw the page
             context.scaleBy(x: scale, y: scale)
             page.draw(with: .mediaBox, to: context)
         }
@@ -391,6 +394,17 @@ final class PDFService {
             return nil
         }
         return bitmapRep.representation(using: .png, properties: [:])
+        #else
+        let renderer = UIGraphicsImageRenderer(size: scaledSize)
+        let image = renderer.image { ctx in
+            let cgContext = ctx.cgContext
+            cgContext.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+            cgContext.fill(CGRect(origin: .zero, size: scaledSize))
+            cgContext.scaleBy(x: scale, y: scale)
+            page.draw(with: .mediaBox, to: cgContext)
+        }
+        return image.pngData()
+        #endif
     }
 
     // MARK: - Document Analysis

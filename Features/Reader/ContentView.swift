@@ -1,6 +1,9 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+#if os(macOS)
+import AppKit
+#endif
 
 // MARK: - Collection Colors
 
@@ -24,16 +27,39 @@ struct ContentView: View {
     @State private var isImporting = false
     @State private var isDragOver = false
 
+    #if os(iOS)
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var isSidebarVisible = true
+    #endif
+
+    /// Whether the sidebar should be displayed.
+    private var shouldShowSidebar: Bool {
+        #if os(macOS)
+        true
+        #else
+        isSidebarVisible
+        #endif
+    }
+
     var body: some View {
         HStack(spacing: 0) {
-            // Custom sidebar
-            SidebarView()
-                .frame(width: 240)
+            // Custom sidebar — always visible on macOS, toggleable on iPad
+            if shouldShowSidebar {
+                SidebarView(onClose: {
+                    #if os(iOS)
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isSidebarVisible = false
+                    }
+                    #endif
+                })
+                    .frame(width: 240)
+                    .transition(.move(edge: .leading))
 
-            // Thin custom divider
-            Rectangle()
-                .fill(PedefTheme.TextColor.tertiary.opacity(0.15))
-                .frame(width: 1)
+                // Thin custom divider
+                Rectangle()
+                    .fill(PedefTheme.TextColor.tertiary.opacity(0.15))
+                    .frame(width: 1)
+            }
 
             // Detail content
             VStack(spacing: 0) {
@@ -46,10 +72,31 @@ struct ContentView: View {
                     DragOverlay()
                 }
             }
+            #if os(iOS)
+            .overlay(alignment: .topLeading) {
+                if !isSidebarVisible {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            isSidebarVisible = true
+                        }
+                    } label: {
+                        Image(systemName: "sidebar.leading")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(PedefTheme.Brand.indigo)
+                            .frame(width: 36, height: 36)
+                            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.md))
+                    }
+                    .padding(PedefTheme.Spacing.md)
+                    .transition(.opacity)
+                }
+            }
+            #endif
         }
         .sheet(isPresented: $appState.isAgentPanelVisible) {
             AgentPanelView()
+                #if os(macOS)
                 .frame(minWidth: 420, minHeight: 550)
+                #endif
         }
         .fileImporter(
             isPresented: $isImporting,
@@ -64,14 +111,31 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .importPDF)) { _ in
             isImporting = true
         }
+        .onReceive(NotificationCenter.default.publisher(for: .importPDFFromURL)) { notification in
+            if let url = notification.object as? URL {
+                importPDF(from: url)
+            }
+        }
         .onChange(of: appState.sidebarSelection) {
             if appState.currentPaper != nil {
                 appState.closePaper()
             }
         }
+        #if os(iOS)
+        .onChange(of: horizontalSizeClass) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                isSidebarVisible = (horizontalSizeClass == .regular)
+            }
+        }
+        .onAppear {
+            isSidebarVisible = (horizontalSizeClass == .regular)
+            errorReporter.flushPending()
+        }
+        #else
         .onAppear {
             errorReporter.flushPending()
         }
+        #endif
         .alert(item: $errorReporter.currentError) { item in
             Alert(
                 title: Text(item.title),
@@ -220,6 +284,9 @@ struct DragOverlay: View {
 // MARK: - Sidebar
 
 struct SidebarView: View {
+    /// Called on iOS when the user taps the close button to hide the sidebar.
+    var onClose: (() -> Void)? = nil
+
     @EnvironmentObject private var appState: AppState
     @Environment(\.modelContext) private var modelContext
     @Query private var collections: [Collection]
@@ -258,11 +325,28 @@ struct SidebarView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Import PDF (⇧⌘I)")
+
+                #if os(iOS)
+                if onClose != nil {
+                    Button {
+                        onClose?()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(PedefTheme.TextColor.secondary)
+                            .frame(width: 24, height: 24)
+                            .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
+                    }
+                    .buttonStyle(.plain)
+                }
+                #endif
             }
             .padding(.horizontal, PedefTheme.Spacing.lg)
             .padding(.top, PedefTheme.Spacing.xl)
             .padding(.bottom, PedefTheme.Spacing.md)
+            #if os(macOS)
             .background(WindowDragArea())
+            #endif
 
             // Sidebar content
             ScrollView {
@@ -654,7 +738,9 @@ struct LibraryView: View {
                     .padding(.vertical, PedefTheme.Spacing.xs)
                     .background(PedefTheme.Surface.hover, in: RoundedRectangle(cornerRadius: PedefTheme.Radius.sm))
                 }
+                #if os(macOS)
                 .menuStyle(.borderlessButton)
+                #endif
                 .fixedSize()
                 .help("Sort Order")
 
@@ -673,7 +759,9 @@ struct LibraryView: View {
                     .fill(PedefTheme.TextColor.tertiary.opacity(0.15))
                     .frame(height: 1)
             }
+            #if os(macOS)
             .background(WindowDragArea())
+            #endif
 
             // Content
             if papers.isEmpty {
@@ -832,8 +920,8 @@ struct PaperCard: View {
                     .aspectRatio(0.75, contentMode: .fit)
                     .overlay {
                         if let thumbnailData = paper.thumbnailData,
-                           let nsImage = NSImage(data: thumbnailData) {
-                            Image(nsImage: nsImage)
+                           let image = PlatformImage(data: thumbnailData) {
+                            Image(platformImage: image)
                                 .resizable()
                                 .aspectRatio(contentMode: .fill)
                                 .clipped()
@@ -1002,7 +1090,11 @@ struct PaperContextMenu: View {
             Button {
                 showInFinder()
             } label: {
+                #if os(macOS)
                 Label("Show in Finder", systemImage: "folder")
+                #else
+                Label("Share", systemImage: "square.and.arrow.up")
+                #endif
             }
 
             Divider()
@@ -1016,6 +1108,7 @@ struct PaperContextMenu: View {
     }
 
     private func exportPaper() {
+        #if os(macOS)
         let savePanel = NSSavePanel()
         savePanel.allowedContentTypes = [.pdf]
         savePanel.nameFieldStringValue = "\(paper.title).pdf"
@@ -1025,25 +1118,39 @@ struct PaperContextMenu: View {
                 do {
                     try paper.pdfData.write(to: url)
                 } catch {
-                    // Error handled silently - could add error reporting
                     print("Export failed: \(error.localizedDescription)")
                 }
             }
         }
+        #else
+        // On iOS/iPadOS, write to a temporary file and share via system share sheet
+        let tempDir = FileManager.default.temporaryDirectory
+        let tempURL = tempDir.appendingPathComponent("\(paper.title).pdf")
+        do {
+            try paper.pdfData.write(to: tempURL)
+            PlatformFileActions.sharePDF(url: tempURL)
+        } catch {
+            print("Export failed: \(error.localizedDescription)")
+        }
+        #endif
     }
 
     private func showInFinder() {
-        // Create a temporary file to show in Finder
         let tempDir = FileManager.default.temporaryDirectory
         let tempURL = tempDir.appendingPathComponent("\(paper.title).pdf")
 
         do {
             try paper.pdfData.write(to: tempURL)
-            NSWorkspace.shared.selectFile(tempURL.path, inFileViewerRootedAtPath: tempDir.path)
+            #if os(macOS)
+            PlatformFileActions.revealInFileBrowser(url: tempURL)
+            #else
+            PlatformFileActions.sharePDF(url: tempURL)
+            #endif
         } catch {
-            // Fallback: open Documents folder
             if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-                NSWorkspace.shared.open(documentsURL)
+                #if os(macOS)
+                PlatformFileActions.openDirectory(url: documentsURL)
+                #endif
             }
         }
     }
@@ -1083,8 +1190,8 @@ struct PaperRow: View {
                 .frame(width: 44, height: 60)
                 .overlay {
                     if let thumbnailData = paper.thumbnailData,
-                       let nsImage = NSImage(data: thumbnailData) {
-                        Image(nsImage: nsImage)
+                       let image = PlatformImage(data: thumbnailData) {
+                        Image(platformImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                             .clipped()

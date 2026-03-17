@@ -1,0 +1,137 @@
+syntax = "proto3";
+
+package pedef;
+
+import "google/protobuf/timestamp.proto";
+
+// Shared data transfer objects for Pedef sync
+
+// Bounding rectangle for annotations
+message Rect {
+  double x = 1;
+  double y = 2;
+  double width = 3;
+  double height = 4;
+}
+
+// Paper metadata (excludes PDF binary data — transferred via PaperService streaming RPCs)
+message PaperMetadata {
+  string id = 1;                   // UUID
+  string title = 2;
+  repeated string authors = 3;
+  string abstract = 4;             // empty if unset
+  string doi = 5;
+  string arxiv_id = 6;
+  google.protobuf.Timestamp published_date = 7;
+  string journal = 8;
+  string volume = 9;
+  string issue = 10;
+  string pages = 11;
+  repeated string keywords = 12;
+
+  int32 page_count = 13;
+  int64 file_size = 14;
+  bytes thumbnail_data = 15;
+
+  double reading_progress = 16;    // 0.0–1.0
+  int32 current_page = 17;
+  google.protobuf.Timestamp last_opened_date = 18;
+  double total_reading_time = 19;  // seconds
+
+  google.protobuf.Timestamp imported_date = 20;
+  google.protobuf.Timestamp modified_date = 21;
+
+  map<string, string> custom_metadata = 22;
+  repeated string tags = 23;           // legacy string tags
+  repeated string tag_ids = 24;        // Tag object UUIDs
+  repeated string collection_ids = 25; // Collection UUIDs
+
+  bool is_deleted = 26;               // soft delete flag
+}
+
+// Annotation types matching Swift AnnotationType enum
+enum AnnotationType {
+  ANNOTATION_TYPE_UNSPECIFIED = 0;
+  ANNOTATION_TYPE_HIGHLIGHT = 1;
+  ANNOTATION_TYPE_UNDERLINE = 2;
+  ANNOTATION_TYPE_STRIKETHROUGH = 3;
+  ANNOTATION_TYPE_TEXT_NOTE = 4;
+  ANNOTATION_TYPE_STICKY_NOTE = 5;
+  ANNOTATION_TYPE_FREEHAND_DRAWING = 6;
+  ANNOTATION_TYPE_SHAPE = 7;
+  ANNOTATION_TYPE_BOOKMARK = 8;
+}
+
+// Annotation DTO
+message AnnotationDTO {
+  string id = 1;                  // UUID
+  string paper_id = 2;           // parent Paper UUID
+  AnnotationType type = 3;
+  string color_hex = 4;
+
+  int32 page_index = 5;
+  Rect bounds = 6;
+
+  string selected_text = 7;
+  string note_content = 8;
+  bytes drawing_data = 9;
+
+  repeated string tags = 10;
+
+  google.protobuf.Timestamp created_date = 11;
+  google.protobuf.Timestamp modified_date = 12;
+
+  bool is_deleted = 13;
+}
+
+// Collection types matching Swift CollectionType enum
+enum CollectionType {
+  COLLECTION_TYPE_UNSPECIFIED = 0;
+  COLLECTION_TYPE_FOLDER = 1;
+  COLLECTION_TYPE_SMART_FOLDER = 2;
+  COLLECTION_TYPE_READING_LIST = 3;
+  COLLECTION_TYPE_FAVORITES = 4;
+}
+
+// Collection DTO
+message CollectionDTO {
+  string id = 1;                  // UUID
+  string name = 2;
+  CollectionType type = 3;
+  string color_hex = 4;
+  string icon_name = 5;
+
+  string parent_id = 6;          // parent Collection UUID (empty if root)
+  repeated string paper_ids = 7;
+  bytes smart_rules_data = 8;    // JSON-encoded smart folder rules
+  string notes = 9;
+  int32 sort_order = 10;
+
+  google.protobuf.Timestamp created_date = 11;
+  google.protobuf.Timestamp modified_date = 12;
+
+  bool is_deleted = 13;
+}
+
+// Tag DTO
+message TagDTO {
+  string id = 1;                  // UUID
+  string name = 2;
+  string color_hex = 3;
+  int32 usage_count = 4;
+
+  google.protobuf.Timestamp created_date = 5;
+
+  repeated string paper_ids = 6; // Papers using this tag
+
+  bool is_deleted = 7;
+}
+
+// Tracks which entities were deleted (for delta sync)
+message Deletions {
+  repeated string paper_ids = 1;
+  repeated string annotation_ids = 2;
+  repeated string collection_ids = 3;
+  repeated string tag_ids = 4;
+}
+
