@@ -22,7 +22,8 @@ struct PedefApp: App {
             Collection.self,
             Tag.self,
             ActionHistory.self,
-            ReadingSession.self
+            ReadingSession.self,
+            DeletionRecord.self
         ])
         let modelConfiguration = ModelConfiguration(
             schema: schema,
@@ -57,13 +58,21 @@ struct PedefApp: App {
                 .onAppear {
                     tagService.configure(with: sharedModelContainer.mainContext)
                     historyService.setModelContext(sharedModelContainer.mainContext)
+                    configureSyncIfEnabled(modelContext: sharedModelContainer.mainContext)
+                }
+                .onOpenURL { url in
+                    // Handle PDFs opened from Files.app (iPad) or Finder (macOS)
+                    guard url.pathExtension.lowercased() == "pdf" else { return }
+                    NotificationCenter.default.post(name: .importPDFFromURL, object: url)
                 }
         }
         .modelContainer(sharedModelContainer)
+        #if os(macOS)
         .windowStyle(.hiddenTitleBar)
         .commands {
             PedefCommands()
         }
+        #endif
 
         #if os(macOS)
         Settings {
@@ -80,6 +89,38 @@ struct PedefApp: App {
         .defaultSize(width: 400, height: 600)
         #endif
     }
+
+    // MARK: - Sync Lifecycle
+
+    /// Reads saved sync config from UserDefaults/Keychain and starts auto-sync if enabled.
+    private func configureSyncIfEnabled(modelContext: ModelContext) {
+        guard UserDefaults.standard.bool(forKey: "syncEnabled") else { return }
+
+        if #available(macOS 15.0, iOS 18.0, *) {
+            let host = UserDefaults.standard.string(forKey: "syncHost") ?? "localhost"
+            let port = UserDefaults.standard.integer(forKey: "syncPort")
+            let useTLS = UserDefaults.standard.bool(forKey: "syncUseTLS")
+            let interval = UserDefaults.standard.integer(forKey: "syncAutoInterval")
+            let token = KeychainService.shared.syncAuthToken ?? ""
+
+            let config = SyncServerConfig(
+                host: host,
+                port: port == 0 ? 50051 : port,
+                authToken: token,
+                useTLS: useTLS
+            )
+
+            let syncService = SyncService()
+            do {
+                try syncService.configure(with: config)
+                if interval > 0 {
+                    syncService.startAutoSync(interval: TimeInterval(interval), modelContext: modelContext)
+                }
+            } catch {
+                print("Failed to configure sync on launch: \(error)")
+            }
+        }
+    }
 }
 
 // MARK: - App State
@@ -92,6 +133,7 @@ final class AppState: ObservableObject {
     @Published var isAgentPanelVisible: Bool = false
     @Published var searchQuery: String = ""
     @Published var sidebarSelection: SidebarItem? = .library
+    @Published private(set) var readerMCPSessionID: UUID?
 
     enum SidebarItem: Hashable {
         case library
@@ -105,11 +147,22 @@ final class AppState: ObservableObject {
     }
 
     func openPaper(_ paper: Paper) {
+        if let existingSessionID = readerMCPSessionID {
+            ReaderMCPService.shared.closeSession(existingSessionID)
+        }
+
         currentPaper = paper
         currentPage = paper.currentPage
+        let session = ReaderMCPService.shared.openSession(for: paper, currentPage: paper.currentPage)
+        readerMCPSessionID = session.id
     }
 
     func closePaper() {
+        if let existingSessionID = readerMCPSessionID {
+            ReaderMCPService.shared.closeSession(existingSessionID)
+            readerMCPSessionID = nil
+        }
+
         currentPaper = nil
         selectedText = nil
         currentPage = 0
@@ -196,6 +249,7 @@ struct PedefCommands: Commands {
 
 extension Notification.Name {
     static let importPDF = Notification.Name("importPDF")
+    static let importPDFFromURL = Notification.Name("importPDFFromURL")
     static let previousPage = Notification.Name("previousPage")
     static let nextPage = Notification.Name("nextPage")
     static let zoomIn = Notification.Name("zoomIn")

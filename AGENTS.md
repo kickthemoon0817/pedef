@@ -39,13 +39,22 @@ Pedef is a native macOS PDF reader and knowledge archive for academic research. 
 - Maintain accessible UI (VoiceOver, keyboard nav, contrast)
 - Avoid large refactors when making focused fixes
 
+## Project Version Control
+
+This repository uses Git for version control. Please follow these guidelines when contributing:
+
+1. **Branching Strategy**: Use feature branches for new features and bug fixes. Name branches descriptively (e.g., `feature/add-user-authentication`, `bugfix/fix-login-error`). This is important to avoid conflicts between branches.
+2. **Commit Messages**: Use conventional commit format `type(scope): description`, e.g. `feat(reader): add page capture` or `fix(ui): resolve contrast issue`.
+3. **Pull Requests**: Submit pull requests for code reviews before merging changes into the main branch. Ensure that your code passes all tests and adheres to coding standards.
+4. **Code Reviews**: Participate in code reviews to maintain code quality and share knowledge among team members.
+
 ## Build and Test
 - Build: `xcodebuild -scheme Pedef -configuration Debug build -destination 'platform=macOS'`
 - Test: `xcodebuild -scheme Pedef test -destination 'platform=macOS'` or `./scripts/run-tests.sh`
 
 ## CI and PR Workflow
 - CI: `.github/workflows/ci.yml` runs SwiftLint (non-blocking), build, and test on PRs and main.
-- PRs: follow `pull_request_format.md` and the template at `.github/pull_request_template.md`.
+- PRs: follow the template at `.github/pull_request_template.md`.
 - Verification: use automated commands only; avoid manual checks in agent workflows.
 
 ## Environment Variables

@@ -11,6 +11,7 @@ final class KeychainService: ObservableObject {
     // Keychain keys
     private enum Keys {
         static let anthropicAPIKey = "anthropic_api_key"
+        static let syncAuthToken = "sync_auth_token"
     }
 
     private init() {
@@ -72,5 +73,44 @@ final class KeychainService: ObservableObject {
         // Anthropic API keys start with "sk-ant-" and are fairly long
         let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.hasPrefix("sk-ant-") && trimmed.count > 20
+    }
+
+    // MARK: - Sync Auth Token
+
+    /// The stored sync authentication token, or nil if not set
+    var syncAuthToken: String? {
+        get {
+            do {
+                return try keychain.get(Keys.syncAuthToken)
+            } catch {
+                print("Failed to retrieve sync auth token from Keychain: \(error)")
+                return nil
+            }
+        }
+        set {
+            do {
+                if let newValue = newValue, !newValue.isEmpty {
+                    try keychain.set(newValue, key: Keys.syncAuthToken)
+                } else {
+                    try keychain.remove(Keys.syncAuthToken)
+                }
+                objectWillChange.send()
+            } catch {
+                print("Failed to store sync auth token in Keychain: \(error)")
+            }
+        }
+    }
+
+    /// Check if a sync auth token is configured
+    var hasSyncAuthToken: Bool {
+        if let token = syncAuthToken, !token.isEmpty {
+            return true
+        }
+        return false
+    }
+
+    /// Clear the stored sync auth token
+    func clearSyncAuthToken() {
+        syncAuthToken = nil
     }
 }
