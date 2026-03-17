@@ -175,3 +175,46 @@ extension Annotation {
         }
     }
 }
+
+// MARK: - Filtering Helpers
+
+extension Annotation {
+    /// Whether this annotation is a bookmark type
+    var isBookmark: Bool {
+        type == .bookmark
+    }
+
+    /// Whether this annotation is a note-like type (sticky note or text note)
+    var isNote: Bool {
+        type == .stickyNote || type == .textNote
+    }
+
+    /// Get a color enum value from the stored hex, falling back to yellow
+    var annotationColor: AnnotationColor {
+        AnnotationColor.allCases.first { $0.rawValue == colorHex } ?? .yellow
+    }
+}
+
+// MARK: - Paper Annotation Helpers
+
+extension Paper {
+    /// All bookmarks in this paper, sorted by page
+    var bookmarks: [Annotation] {
+        annotations.filter { $0.isBookmark }.sorted { $0.pageIndex < $1.pageIndex }
+    }
+
+    /// All notes (sticky notes, text notes, and annotations with comments)
+    var notes: [Annotation] {
+        annotations.filter { $0.isNote || $0.hasNote }
+    }
+
+    /// Whether a specific page is bookmarked
+    func isPageBookmarked(_ pageIndex: Int) -> Bool {
+        annotations.contains { $0.isBookmark && $0.pageIndex == pageIndex }
+    }
+
+    /// Highlights only (no bookmarks)
+    var highlights: [Annotation] {
+        annotations.filter { $0.type == .highlight || $0.type == .underline || $0.type == .strikethrough }
+    }
+}
