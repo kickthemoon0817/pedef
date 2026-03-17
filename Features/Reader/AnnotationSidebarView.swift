@@ -23,8 +23,13 @@ struct AnnotationSidebarView: View {
     @Bindable var paper: Paper
     let currentPage: Int
     var onNavigateToPage: ((Int) -> Void)?
+    @Binding var selectedTab: AnnotationSidebarTab
+    var onToggleBookmark: (() -> Void)?
+    var onCreateNote: ((String) -> Void)?
+    var onDeleteNote: ((Annotation) -> Void)?
+    var onDeleteBookmark: ((Annotation) -> Void)?
+    var selectedText: String?
 
-    @State private var selectedTab: AnnotationSidebarTab = .all
     @State private var filterType: AnnotationType?
     @State private var filterColor: AnnotationColor?
     @State private var searchText = ""
@@ -68,14 +73,6 @@ struct AnnotationSidebarView: View {
 
     private var bookmarkAnnotations: [Annotation] {
         allAnnotations.filter { $0.type == .bookmark }
-    }
-
-    private func badgeCount(for tab: AnnotationSidebarTab) -> Int {
-        switch tab {
-        case .all: return filteredAnnotations.count
-        case .notes: return noteAnnotations.count
-        case .bookmarks: return bookmarkAnnotations.count
-        }
     }
 
     var body: some View {
@@ -184,18 +181,27 @@ struct AnnotationSidebarView: View {
                     notes: noteAnnotations,
                     currentPage: currentPage,
                     paper: paper,
-                    onNavigateToPage: onNavigateToPage
+                    onNavigateToPage: onNavigateToPage,
+                    onCreateNote: onCreateNote,
+                    onDeleteNote: onDeleteNote,
+                    selectedText: selectedText
                 )
             case .bookmarks:
                 BookmarksTabView(
                     bookmarks: bookmarkAnnotations,
                     currentPage: currentPage,
                     paper: paper,
-                    onNavigateToPage: onNavigateToPage
+                    onNavigateToPage: onNavigateToPage,
+                    onToggleBookmark: onToggleBookmark,
+                    onDeleteBookmark: onDeleteBookmark
                 )
             }
         }
         .background(PedefTheme.Surface.sidebar)
+        .onChange(of: selectedTab) { _, _ in
+            filterType = nil
+            filterColor = nil
+        }
     }
 }
 
@@ -818,7 +824,9 @@ struct NotesTabView: View {
     let currentPage: Int
     @Bindable var paper: Paper
     var onNavigateToPage: ((Int) -> Void)?
-    @Environment(\.modelContext) private var modelContext
+    var onCreateNote: ((String) -> Void)?
+    var onDeleteNote: ((Annotation) -> Void)?
+    var selectedText: String?
     @State private var showNewNote = false
 
     var body: some View {
@@ -835,6 +843,7 @@ struct NotesTabView: View {
                         if showNewNote {
                             NewStickyNoteCard(
                                 pageIndex: currentPage,
+                                initialContent: selectedText ?? "",
                                 onSave: { content in
                                     createNote(content: content)
                                     showNewNote = false
@@ -879,19 +888,26 @@ struct NotesTabView: View {
     }
 
     private func createNote(content: String) {
-        let annotation = Annotation(
-            type: .stickyNote,
-            pageIndex: currentPage,
-            bounds: .zero
-        )
-        annotation.noteContent = content
-        annotation.paper = paper
-        paper.annotations.append(annotation)
+        if let onCreateNote {
+            onCreateNote(content)
+        } else {
+            let annotation = Annotation(
+                type: .stickyNote,
+                pageIndex: currentPage,
+                bounds: .zero
+            )
+            annotation.noteContent = content
+            annotation.paper = paper
+            paper.annotations.append(annotation)
+        }
     }
 
     private func deleteNote(_ note: Annotation) {
-        paper.annotations.removeAll { $0.id == note.id }
-        modelContext.delete(note)
+        if let onDeleteNote {
+            onDeleteNote(note)
+        } else {
+            paper.annotations.removeAll { $0.id == note.id }
+        }
     }
 }
 
@@ -1063,6 +1079,7 @@ struct StickyNoteCard: View {
 
 struct NewStickyNoteCard: View {
     let pageIndex: Int
+    var initialContent: String = ""
     let onSave: (String) -> Void
     let onCancel: () -> Void
     @State private var content = ""
@@ -1136,7 +1153,10 @@ struct NewStickyNoteCard: View {
             .fill(PedefTheme.Semantic.warning)
             .frame(width: 3)
         }
-        .onAppear { isFocused = true }
+        .onAppear {
+            if !initialContent.isEmpty { content = initialContent }
+            isFocused = true
+        }
     }
 }
 
@@ -1147,7 +1167,8 @@ struct BookmarksTabView: View {
     let currentPage: Int
     @Bindable var paper: Paper
     var onNavigateToPage: ((Int) -> Void)?
-    @Environment(\.modelContext) private var modelContext
+    var onToggleBookmark: (() -> Void)?
+    var onDeleteBookmark: ((Annotation) -> Void)?
 
     var isCurrentPageBookmarked: Bool {
         bookmarks.contains { $0.pageIndex == currentPage }
@@ -1164,7 +1185,7 @@ struct BookmarksTabView: View {
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(bookmarks.sorted(by: { $0.pageIndex < $1.pageIndex })) { bookmark in
+                        ForEach(bookmarks) { bookmark in
                             BookmarkRow(
                                 bookmark: bookmark,
                                 isCurrentPage: bookmark.pageIndex == currentPage,
@@ -1203,7 +1224,9 @@ struct BookmarksTabView: View {
     }
 
     private func toggleBookmark() {
-        if let existing = bookmarks.first(where: { $0.pageIndex == currentPage }) {
+        if let onToggleBookmark {
+            onToggleBookmark()
+        } else if let existing = bookmarks.first(where: { $0.pageIndex == currentPage }) {
             removeBookmark(existing)
         } else {
             let bookmark = Annotation(type: .bookmark, pageIndex: currentPage, bounds: .zero)
@@ -1213,8 +1236,11 @@ struct BookmarksTabView: View {
     }
 
     private func removeBookmark(_ bookmark: Annotation) {
-        paper.annotations.removeAll { $0.id == bookmark.id }
-        modelContext.delete(bookmark)
+        if let onDeleteBookmark {
+            onDeleteBookmark(bookmark)
+        } else {
+            paper.annotations.removeAll { $0.id == bookmark.id }
+        }
     }
 }
 

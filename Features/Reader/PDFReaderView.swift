@@ -12,6 +12,7 @@ struct PDFReaderView: View {
     @State private var showThumbnails: Bool = false
     @State private var showPageJumpSheet: Bool = false
     @State private var pageJumpText: String = ""
+    @State private var annotationSidebarTab: AnnotationSidebarTab = .all
 
     var body: some View {
         VStack(spacing: 0) {
@@ -81,7 +82,13 @@ struct PDFReaderView: View {
                     AnnotationSidebarView(
                         paper: paper,
                         currentPage: appState.currentPage,
-                        onNavigateToPage: { page in handlePageChange(page: page) }
+                        onNavigateToPage: { page in handlePageChange(page: page) },
+                        selectedTab: $annotationSidebarTab,
+                        onToggleBookmark: { toggleBookmark() },
+                        onCreateNote: { content in createNoteFromSidebar(content: content) },
+                        onDeleteNote: { note in deleteNoteFromSidebar(note) },
+                        onDeleteBookmark: { bookmark in deleteBookmarkFromSidebar(bookmark) },
+                        selectedText: appState.selectedText
                     )
                     .frame(minWidth: 260, idealWidth: 320, maxWidth: 380)
                 }
@@ -288,6 +295,49 @@ struct PDFReaderView: View {
         if !showAnnotationSidebar {
             showAnnotationSidebar = true
         }
+        annotationSidebarTab = .notes
+    }
+
+    // MARK: - Sidebar Callbacks
+
+    private func createNoteFromSidebar(content: String) {
+        let annotation = Annotation(
+            type: .stickyNote,
+            pageIndex: appState.currentPage,
+            bounds: .zero
+        )
+        annotation.noteContent = content
+        annotation.paper = paper
+        paper.annotations.append(annotation)
+
+        historyService.recordAction(
+            .createNote,
+            paperId: paper.id,
+            annotationId: annotation.id,
+            details: AnnotationDetails(
+                pageIndex: appState.currentPage,
+                annotationType: "stickyNote",
+                selectedText: nil
+            )
+        )
+    }
+
+    private func deleteNoteFromSidebar(_ note: Annotation) {
+        paper.annotations.removeAll { $0.id == note.id }
+        historyService.recordAction(
+            .deleteAnnotation,
+            paperId: paper.id,
+            annotationId: note.id
+        )
+    }
+
+    private func deleteBookmarkFromSidebar(_ bookmark: Annotation) {
+        paper.annotations.removeAll { $0.id == bookmark.id }
+        historyService.recordAction(
+            .deleteAnnotation,
+            paperId: paper.id,
+            annotationId: bookmark.id
+        )
     }
 }
 
