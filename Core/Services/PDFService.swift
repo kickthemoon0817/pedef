@@ -118,10 +118,18 @@ final class PDFService {
         pageIndex: Int,
         options: PDFCaptureOptions = PDFCaptureOptions()
     ) -> PDFCaptureResult? {
-        guard let document = PDFDocument(data: data),
-              let page = document.page(at: pageIndex) else {
-            return nil
-        }
+        guard let document = PDFDocument(data: data) else { return nil }
+        return capturePage(from: document, pageIndex: pageIndex, options: options)
+    }
+
+    /// Capture an entire page as PNG data using an already parsed document.
+    @MainActor
+    func capturePage(
+        from document: PDFDocument,
+        pageIndex: Int,
+        options: PDFCaptureOptions = PDFCaptureOptions()
+    ) -> PDFCaptureResult? {
+        guard let page = document.page(at: pageIndex) else { return nil }
 
         let appearance = Self.resolveAppearance(options.appearance)
         let pageBounds = page.bounds(for: .mediaBox)
@@ -136,10 +144,19 @@ final class PDFService {
         rect: CGRect,
         options: PDFCaptureOptions = PDFCaptureOptions()
     ) -> PDFCaptureResult? {
-        guard let document = PDFDocument(data: data),
-              let page = document.page(at: pageIndex) else {
-            return nil
-        }
+        guard let document = PDFDocument(data: data) else { return nil }
+        return captureRegion(from: document, pageIndex: pageIndex, rect: rect, options: options)
+    }
+
+    /// Capture a rectangular region from a page using an already parsed document.
+    @MainActor
+    func captureRegion(
+        from document: PDFDocument,
+        pageIndex: Int,
+        rect: CGRect,
+        options: PDFCaptureOptions = PDFCaptureOptions()
+    ) -> PDFCaptureResult? {
+        guard let page = document.page(at: pageIndex) else { return nil }
 
         let appearance = Self.resolveAppearance(options.appearance)
         return captureRegion(page: page, pageIndex: pageIndex, rect: rect, options: options, resolvedAppearance: appearance)
